@@ -34,26 +34,28 @@ class UserModel {
   });
 
   /// Convierte un Map (resultado de la BD) a un objeto UserModel
-  factory UserModel.fromMap(Map<String, dynamic> map) {
-    return UserModel(
-      id: map['ID'],
-      name: map['name'],
-      image: map['image'],
-      balance: map['balance'] ?? 0.00,
-      email: map['email'],
-      password: map['password'],
-      description: map['description'],
-      role: map['role'],
-      cellphone: map['cellphone'],
-      deliveryModeID: map['deliveryModeID'],
-      pickUpLocationID: map['pickUpLocationID'],
-      registerDate: map['registerDate'] != null
-          ? DateTime.parse(map['registerDate'].toString())
-          : null,
-      state: map['state'] ?? 1,
-    );
-  }
-
+factory UserModel.fromMap(Map<String, dynamic> map) {
+  return UserModel(
+    id: map['ID'] != null ? int.parse(map['ID'].toString()) : null,
+    name: map['name']?.toString() ?? '',
+    image: map['image']?.toString(),
+    balance: map['balance'] != null
+        ? double.parse(map['balance'].toString())
+        : 0.0,
+    email: map['email']?.toString() ?? '',
+    password: map['password']?.toString() ?? '',
+    description: map['description']?.toString(),
+    role: map['role'] != null ? int.parse(map['role'].toString()) : 0,
+    cellphone: map['cellphone']?.toString(),
+    deliveryModeID: map['deliveryModeID'] != null
+        ? int.parse(map['deliveryModeID'].toString())
+        : null,
+    pickUpLocationID: map['pickUpLocationID'] != null
+        ? int.parse(map['pickUpLocationID'].toString())
+        : null,
+    state: map['state'] != null ? int.parse(map['state'].toString()) : 1,
+  );
+}
   /// Convierte el objeto UserModel a un Map para insertar en la BD
   Map<String, dynamic> toMap() {
     return {

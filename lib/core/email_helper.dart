@@ -5,8 +5,8 @@ import 'package:mailer/smtp_server.dart';
 /// Principio S de SOLID: solo maneja el envío de correos
 class EmailHelper {
   /// Credenciales del servidor SMTP
-  static const String _email = 'tu@gmail.com';
-  static const String _password = 'tu_contraseña_de_aplicacion';
+  static const String _email = 'mvaleriano1105@gmail.com';
+  static const String _password = 'topu yzup buav ywsw';
 
   /// Configuración del servidor SMTP de Gmail
   static SmtpServer get _smtpServer => gmail(_email, _password);

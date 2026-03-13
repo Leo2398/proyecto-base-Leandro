@@ -1,19 +1,22 @@
 import '../models/user_model.dart';
 import '../services/interfaces/i_user_service.dart';
 import '../services/user_service.dart';
+import '../services/product_family_service.dart';
 import '../core/encryption_helper.dart';
 import '../core/session_helper.dart';
+import '../models/product_family_model.dart';
 import 'package:flutter/material.dart';
 
 /// Controlador de Usuario
 /// Principio S de SOLID: solo maneja la lógica de negocio de usuarios
 /// Principio D de SOLID: depende de la interfaz IUserService
-/// no de la implementación concreta
-/// Implementa ChangeNotifier para el patrón Observer,
-/// notifica a la UI cuando hay cambios
+/// Implementa ChangeNotifier para el patrón Observer
 class UserController extends ChangeNotifier {
   /// Dependencia de la interfaz, no de la implementación (principio D)
   final IUserService _userService;
+
+  /// Servicio de familias de productos
+  final ProductFamilyService _productFamilyService = ProductFamilyService();
 
   /// Usuario actualmente logueado
   UserModel? _currentUser;
@@ -46,22 +49,18 @@ class UserController extends ChangeNotifier {
   bool get sessionChecked => _sessionChecked;
 
   /// Verifica si hay una sesión guardada al iniciar la app
-  /// Si existe, restaura el usuario sin necesidad de login
   Future<void> _checkSavedSession() async {
     try {
       _isLoading = true;
       notifyListeners();
 
-      /// Intenta obtener la sesión guardada
       final savedUser = await SessionHelper.getSession();
 
       if (savedUser != null) {
-        /// Verifica que el usuario siga activo en la BD
         final user = await _userService.getUserById(savedUser.id!);
         if (user != null && user.state == 1) {
           _currentUser = user;
         } else {
-          /// Si el usuario fue desactivado, limpia la sesión
           await SessionHelper.clearSession();
         }
       }
@@ -75,15 +74,12 @@ class UserController extends ChangeNotifier {
   }
 
   /// Inicia sesión con email y password
-  /// Verifica si la contraseña es temporal y obliga al cambio
   Future<bool> login(String email, String password) async {
     try {
-      /// Activa el indicador de carga y notifica a la UI
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
 
-      /// Verifica credenciales en la BD
       final user = await _userService.login(email, password);
 
       if (user == null) {
@@ -91,14 +87,10 @@ class UserController extends ChangeNotifier {
         return false;
       }
 
-      /// Guarda el usuario logueado
       _currentUser = user;
-
-      /// Guarda la sesión en el almacenamiento local
       await SessionHelper.saveSession(user);
 
       /// Verifica si la contraseña es temporal
-      /// Si empieza con 1pc el usuario debe cambiarla obligatoriamente
       _mustChangePassword = EncryptionHelper.isTempPassword(password);
 
       return true;
@@ -106,15 +98,18 @@ class UserController extends ChangeNotifier {
       _errorMessage = 'Error al iniciar sesión: $e';
       return false;
     } finally {
-      /// Desactiva el indicador de carga y notifica a la UI
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Registra un nuevo usuario
-  /// La contraseña temporal se genera y envía automáticamente
-  Future<bool> register(UserModel user) async {
+  /// Registra un nuevo cliente
+  Future<bool> registerClient({
+    required UserModel user,
+    double? latitude,
+    double? longitude,
+    required String address,
+  }) async {
     try {
       _isLoading = true;
       _errorMessage = null;
@@ -127,9 +122,14 @@ class UserController extends ChangeNotifier {
         return false;
       }
 
-      /// Crea el usuario en la BD
-      /// El servicio genera la contraseña temporal y la envía por email
-      final success = await _userService.createUser(user);
+      /// Crea el usuario con su ubicación
+      final success = await _userService.createUser(
+        user,
+        latitude: latitude,
+        longitude: longitude,
+        address: address,
+      );
+
       if (!success) {
         _errorMessage = 'Error al registrar usuario';
         return false;
@@ -145,8 +145,67 @@ class UserController extends ChangeNotifier {
     }
   }
 
+  /// Registra un nuevo productor con familias de productos y delivery mode
+  Future<bool> registerProducer({
+    required UserModel user,
+    double? latitude,
+    double? longitude,
+    required String address,
+    required int deliveryModeID,
+    required List<int> familyIDs,
+  }) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      /// Verifica si el email ya existe
+      final existingUser = await _userService.getUserByEmail(user.email);
+      if (existingUser != null) {
+        _errorMessage = 'El email ya está registrado';
+        return false;
+      }
+
+      /// Crea el usuario productor con su ubicación y delivery mode
+      final success = await _userService.createUser(
+        user,
+        latitude: latitude,
+        longitude: longitude,
+        address: address,
+        deliveryModeID: deliveryModeID,
+      );
+
+      if (!success) {
+        _errorMessage = 'Error al registrar productor';
+        return false;
+      }
+
+      /// Obtiene el ID del productor recién creado
+      final producerID = await (_userService as UserService)
+          .getUserIdByEmail(user.email);
+
+      if (producerID == null) return false;
+
+      /// Guarda las familias de productos seleccionadas
+      final familiesSuccess = await _productFamilyService
+          .saveProducerFamilies(producerID, familyIDs);
+
+      if (!familiesSuccess) {
+        _errorMessage = 'Error al guardar familias de productos';
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      _errorMessage = 'Error en el registro del productor: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Cambia la contraseña del usuario actual
-  /// Se usa cuando el usuario tiene contraseña temporal
   Future<bool> changePassword(String newPassword) async {
     try {
       _isLoading = true;
@@ -158,13 +217,11 @@ class UserController extends ChangeNotifier {
         return false;
       }
 
-      /// Validación mínima de contraseña
       if (newPassword.length < 8) {
         _errorMessage = 'La contraseña debe tener mínimo 8 caracteres';
         return false;
       }
 
-      /// Verifica que la nueva contraseña no sea temporal
       if (EncryptionHelper.isTempPassword(newPassword)) {
         _errorMessage = 'No puedes usar una contraseña temporal';
         return false;
@@ -178,9 +235,7 @@ class UserController extends ChangeNotifier {
       );
 
       if (success) {
-        /// Ya no necesita cambiar la contraseña
         _mustChangePassword = false;
-        /// Actualiza la sesión guardada
         await SessionHelper.saveSession(_currentUser!);
       } else {
         _errorMessage = 'Error al cambiar la contraseña';
@@ -212,7 +267,6 @@ class UserController extends ChangeNotifier {
           await _userService.updateBalance(_currentUser!.id!, amount);
 
       if (success) {
-        /// Actualiza el balance localmente sin consultar la BD de nuevo
         _currentUser = UserModel(
           id: _currentUser!.id,
           name: _currentUser!.name,
@@ -225,7 +279,6 @@ class UserController extends ChangeNotifier {
           cellphone: _currentUser!.cellphone,
           state: _currentUser!.state,
         );
-        /// Actualiza la sesión guardada con el nuevo balance
         await SessionHelper.saveSession(_currentUser!);
       }
 
@@ -240,7 +293,6 @@ class UserController extends ChangeNotifier {
   }
 
   /// Cierra la sesión del usuario actual
-  /// Limpia la sesión guardada en el almacenamiento local
   Future<void> logout() async {
     await SessionHelper.clearSession();
     _currentUser = null;

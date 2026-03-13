@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'register_client_view.dart';
+import 'register_producer_view.dart';
 
 /// Pantalla de selección de rol
 /// Principio S de SOLID: solo maneja la UI de selección de rol
@@ -12,7 +13,7 @@ class RoleSelectionView extends StatelessWidget {
       /// Color de fondo beige
       backgroundColor: const Color(0xFFF5F0E8),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Column(
             children: [
@@ -66,16 +67,17 @@ class RoleSelectionView extends StatelessWidget {
                 iconColor: const Color(0xFF5A8A5A),
                 iconBgColor: const Color(0xFFE8F0E8),
                 title: 'Cliente',
-                description: 'Comprar ingredientes frescos de\nproveedores agrícolas',
+                description:
+                    'Comprar ingredientes frescos de\nproveedores agrícolas',
                 arrowColor: const Color(0xFF5A8A5A),
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const RegisterClientView(),
-                    ),
-                  );
-                },
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => const RegisterClientView(),
+    ),
+  );
+},
               ),
 
               const SizedBox(height: 16),
@@ -88,13 +90,17 @@ class RoleSelectionView extends StatelessWidget {
                 title: 'Productor',
                 description: 'Vender productos a restaurantes',
                 arrowColor: const Color(0xFFB8860B),
-                onTap: () {
-                  /// Navega al registro con rol 1 (productor)
-                  // TODO: Navigator.push a RegisterView con role: 1
-                },
+                                onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => const RegisterProducerView(),
+    ),
+  );
+},
               ),
 
-              const Spacer(),
+              const SizedBox(height: 32),
 
               /// Nota inferior
               const Text(
@@ -105,6 +111,8 @@ class RoleSelectionView extends StatelessWidget {
                   color: Color(0xFF888888),
                 ),
               ),
+
+              const SizedBox(height: 24),
             ],
           ),
         ),

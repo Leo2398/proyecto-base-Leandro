@@ -1,8 +1,11 @@
 import '../core/db_connection.dart';
 import '../core/email_helper.dart';
 import '../core/encryption_helper.dart';
+import '../models/location_model.dart';
+import '../models/pickup_location_model.dart';
 import '../models/user_model.dart';
 import 'interfaces/i_user_service.dart';
+import 'location_service.dart';
 
 /// Implementación del servicio de Usuario
 /// Principio S de SOLID: solo maneja operaciones de la BD para usuarios
@@ -10,6 +13,9 @@ import 'interfaces/i_user_service.dart';
 class UserService implements IUserService {
   /// Instancia de la conexión a la BD
   final DBConnection _db = DBConnection.instance;
+
+  /// Servicio de ubicaciones
+  final LocationService _locationService = LocationService();
 
   /// Obtiene un usuario por su ID
   @override
@@ -50,11 +56,38 @@ class UserService implements IUserService {
   }
 
   /// Registra un nuevo usuario en la BD
-  /// Genera contraseña temporal, la cifra y la envía por email
+  /// Guarda Location, PickupLocation y User en orden
   @override
-  Future<bool> createUser(UserModel user) async {
+  Future<bool> createUser(UserModel user,
+      {double? latitude,
+      double? longitude,
+      String? address,
+      int? deliveryModeID}) async {
     try {
       final conn = await _db.getConnection();
+      int? pickUpLocationID;
+
+      /// Si tiene ubicación la guarda en Location y PickupLocation
+      if (latitude != null && longitude != null && address != null) {
+        /// Paso 1: inserta en Location
+        final locationID = await _locationService.createLocation(
+          LocationModel(latitude: latitude, longitude: longitude),
+        );
+
+        if (locationID == null) return false;
+
+        /// Paso 2: inserta en PickupLocation
+        final pickupSuccess = await _locationService.createPickupLocation(
+          PickupLocationModel(
+            locationID: locationID,
+            address: address,
+          ),
+        );
+
+        if (!pickupSuccess) return false;
+
+        pickUpLocationID = locationID;
+      }
 
       /// Genera la contraseña temporal con los datos del usuario
       final tempPassword = EncryptionHelper.generateTempPassword(
@@ -65,11 +98,12 @@ class UserService implements IUserService {
       /// Cifra la contraseña antes de guardarla en la BD
       final hashedPassword = EncryptionHelper.hashPassword(tempPassword);
 
+      /// Paso 3: inserta en User
       await conn.execute(
         '''INSERT INTO User (name, image, balance, email, password, 
-        description, role, cellphone, pickUpLocationID) 
+        description, role, cellphone, deliveryModeID, pickUpLocationID) 
         VALUES (:name, :image, :balance, :email, :password, 
-        :description, :role, :cellphone, :pickUpLocationID)''',
+        :description, :role, :cellphone, :deliveryModeID, :pickUpLocationID)''',
         {
           'name': user.name,
           'image': user.image,
@@ -79,7 +113,8 @@ class UserService implements IUserService {
           'description': user.description,
           'role': user.role,
           'cellphone': user.cellphone,
-          'pickUpLocationID': user.pickUpLocationID,
+          'deliveryModeID': deliveryModeID,
+          'pickUpLocationID': pickUpLocationID,
         },
       );
 
@@ -94,6 +129,24 @@ class UserService implements IUserService {
     } catch (e) {
       print('Error en createUser: $e');
       return false;
+    }
+  }
+
+  /// Obtiene el ID del último usuario insertado por email
+  Future<int?> getUserIdByEmail(String email) async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        'SELECT ID FROM User WHERE email = :email',
+        {'email': email},
+      );
+
+      if (result.rows.isEmpty) return null;
+
+      return int.parse(result.rows.first.assoc()['ID'].toString());
+    } catch (e) {
+      print('Error en getUserIdByEmail: $e');
+      return null;
     }
   }
 
@@ -168,10 +221,7 @@ class UserService implements IUserService {
       final user = UserModel.fromMap(result.rows.first.assoc());
 
       /// Verifica la contraseña con bcrypt
-      final isValid = EncryptionHelper.verifyPassword(
-        password,
-        user.password,
-      );
+      final isValid = EncryptionHelper.verifyPassword(password, user.password);
 
       if (!isValid) return null;
 
@@ -183,7 +233,8 @@ class UserService implements IUserService {
   }
 
   /// Actualiza la contraseña de un usuario y envía confirmación por email
-  Future<bool> updatePassword(int id, String newPassword, String email, String name) async {
+  Future<bool> updatePassword(
+      int id, String newPassword, String email, String name) async {
     try {
       final conn = await _db.getConnection();
 
