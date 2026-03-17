@@ -4,6 +4,8 @@ import '../../controllers/user_controller.dart';
 import 'role_selection_view.dart';
 import 'change_password_view.dart';
 import '../client/client_dashboard_view.dart';
+import 'forgot_password_view.dart';
+import '../admin/admin_dashboard_view.dart';
 /// Pantalla de inicio de sesión
 /// Principio S de SOLID: solo maneja la UI del login
 class LoginView extends StatefulWidget {
@@ -62,6 +64,14 @@ class _LoginViewState extends State<LoginView> {
       context,
       MaterialPageRoute(
         builder: (context) => const ClientDashboardView(),
+      ),
+    );
+  }
+  else if (controller.currentUser!.role == 2) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AdminDashboardView(),
       ),
     );
   }
@@ -275,17 +285,22 @@ Column(
       ],
     ),
     TextButton(
-      onPressed: () {
-        // TODO: navegar a recuperar contraseña
-      },
-      child: const Text(
-        '¿Olvidaste tu contraseña?',
-        style: TextStyle(
-          fontSize: 13,
-          color: Color(0xFF5A8A5A),
-        ),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ForgotPasswordView(),
       ),
+    );
+  },
+  child: const Text(
+    '¿Olvidaste tu contraseña?',
+    style: TextStyle(
+      fontSize: 13,
+      color: Color(0xFF5A8A5A),
     ),
+  ),
+),
   ],
 ),
 

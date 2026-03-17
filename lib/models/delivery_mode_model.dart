@@ -9,12 +9,12 @@ class DeliveryModeModel {
     required this.name,
   });
 
-  factory DeliveryModeModel.fromMap(Map<String, dynamic> map) {
-    return DeliveryModeModel(
-      id: map['ID'],
-      name: map['name'],
-    );
-  }
+factory DeliveryModeModel.fromMap(Map<String, dynamic> map) {
+  return DeliveryModeModel(
+    id: map['ID'] != null ? int.parse(map['ID'].toString()) : null,
+    name: map['name']?.toString() ?? '',
+  );
+}
 
   Map<String, dynamic> toMap() {
     return {

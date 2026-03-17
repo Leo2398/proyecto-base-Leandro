@@ -6,7 +6,11 @@ import '../core/encryption_helper.dart';
 import '../core/session_helper.dart';
 import '../models/product_family_model.dart';
 import 'package:flutter/material.dart';
-
+import 'dart:math';
+import '../services/password_reset_service.dart';
+import '../models/password_reset_token_model.dart';
+import '../core/email_helper.dart';
+import '../services/password_reset_service.dart';
 /// Controlador de Usuario
 /// Principio S de SOLID: solo maneja la lógica de negocio de usuarios
 /// Principio D de SOLID: depende de la interfaz IUserService
@@ -17,6 +21,8 @@ class UserController extends ChangeNotifier {
 
   /// Servicio de familias de productos
   final ProductFamilyService _productFamilyService = ProductFamilyService();
+  /// Servicio de recuperación de contraseña
+  final PasswordResetService _passwordResetService = PasswordResetService();
 
   /// Usuario actualmente logueado
   UserModel? _currentUser;
@@ -300,4 +306,148 @@ class UserController extends ChangeNotifier {
     _mustChangePassword = false;
     notifyListeners();
   }
+  /// Envía el código de recuperación al email del usuario
+Future<bool> sendResetCode(String email) async {
+  try {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    /// Verifica que el email exista en la BD
+    final user = await _userService.getUserByEmail(email);
+    if (user == null) {
+      _errorMessage = 'No existe una cuenta con ese email';
+      return false;
+    }
+
+    /// Elimina tokens anteriores del usuario
+    await _passwordResetService.deleteUserTokens(user.id!);
+
+    /// Genera un código de 6 dígitos aleatorio
+    final random = Random();
+    final code = (100000 + random.nextInt(900000)).toString();
+
+    /// Crea el token con expiración de 15 minutos
+    final token = PasswordResetTokenModel(
+      token: code,
+      userID: user.id!,
+      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 15)),
+    );
+
+    /// Guarda el token primero
+final created = await _passwordResetService.createToken(token);
+if (!created) {
+  _errorMessage = 'Error al generar el código';
+  return false;
+}
+
+/// Envía el email con timeout extendido en segundo plano
+Future(() async {
+  try {
+    await EmailHelper.sendResetCode(
+      toEmail: email,
+      userName: user.name,
+      code: code,
+    ).timeout(const Duration(seconds: 60));
+  } catch (e) {
+    print('Error enviando email reset: $e');
+  }
+});
+
+return true;
+
+  } catch (e) {
+    _errorMessage = 'Error al enviar el código: $e';
+    return false;
+  } finally {
+    _isLoading = false;
+    notifyListeners();
+  }
+}
+
+/// Verifica el código ingresado por el usuario
+Future<bool> verifyResetCode(String email, String code) async {
+  try {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    print('Email: ${email}');
+print('Código ingresado: "$code"');
+    /// Obtiene el usuario por email
+    final user = await _userService.getUserByEmail(email);
+    if (user == null) {
+      _errorMessage = 'No existe una cuenta con ese email';
+      return false;
+    }
+
+    /// Verifica que el token sea válido
+    final token = await _passwordResetService.getValidToken(user.id!, code);
+    if (token == null) {
+      _errorMessage = 'Código inválido o expirado';
+      return false;
+    }
+
+    /// Guarda el usuario temporalmente para el cambio de contraseña
+    _currentUser = user;
+
+    return true;
+  } catch (e) {
+    _errorMessage = 'Error al verificar el código: $e';
+    return false;
+  } finally {
+    _isLoading = false;
+    notifyListeners();
+  }
+}
+
+/// Completa el reset de contraseña marcando el token como usado
+Future<bool> completePasswordReset(String email, String code, String newPassword) async {
+  try {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    final user = await _userService.getUserByEmail(email);
+    if (user == null) {
+      _errorMessage = 'No existe una cuenta con ese email';
+      return false;
+    }
+
+    /// Verifica el token una última vez antes de cambiar
+    final token = await _passwordResetService.getValidToken(user.id!, code);
+    if (token == null) {
+      _errorMessage = 'Código inválido o expirado';
+      return false;
+    }
+
+    if (newPassword.length < 8) {
+      _errorMessage = 'La contraseña debe tener mínimo 8 caracteres';
+      return false;
+    }
+
+    /// Actualiza la contraseña
+    final success = await (_userService as UserService).updatePassword(
+      user.id!,
+      newPassword,
+      user.email,
+      user.name,
+    );
+
+    if (!success) {
+      _errorMessage = 'Error al actualizar la contraseña';
+      return false;
+    }
+
+    /// Marca el token como usado
+    await _passwordResetService.markTokenAsUsed(token.id!);
+
+    return true;
+  } catch (e) {
+    _errorMessage = 'Error al restablecer la contraseña: $e';
+    return false;
+  } finally {
+    _isLoading = false;
+    notifyListeners();
+  }
+}
 }

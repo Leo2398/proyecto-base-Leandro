@@ -1,6 +1,7 @@
 import '../core/db_connection.dart';
 import '../models/product_family_model.dart';
 import 'interfaces/i_product_family_service.dart';
+import 'dart:developer' as developer;
 
 /// Implementación del servicio de familias de productos
 /// Principio S de SOLID: solo maneja operaciones de BD para familias
@@ -14,13 +15,29 @@ class ProductFamilyService implements IProductFamilyService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute('SELECT * FROM ProductFamily');
+      
+      developer.log('ProductFamily - Total rows: ${result.rows.length}');
+      
+      if (result.rows.isNotEmpty) {
+        developer.log('ProductFamily - Primera fila: ${result.rows.first.assoc()}');
+      }
 
-      return result.rows
-          .map((row) => ProductFamilyModel.fromMap(row.assoc()))
+      final families = result.rows
+          .map((row) {
+            try {
+              return ProductFamilyModel.fromMap(row.assoc());
+            } catch (e) {
+              developer.log('Error parseando ProductFamily: $e, data: ${row.assoc()}');
+              rethrow;
+            }
+          })
           .toList();
+          
+      developer.log('✓ ProductFamily cargadas exitosamente: ${families.length}');
+      return families;
     } catch (e) {
-      print('Error en ProductFamilyService.getAll: $e');
-      return [];
+        print('Error en getAll: $e');
+          return [];
     }
   }
 

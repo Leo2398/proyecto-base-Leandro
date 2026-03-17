@@ -9,12 +9,12 @@ class ProductFamilyModel {
     required this.name,
   });
 
-  factory ProductFamilyModel.fromMap(Map<String, dynamic> map) {
-    return ProductFamilyModel(
-      id: map['ID'],
-      name: map['name'],
-    );
-  }
+factory ProductFamilyModel.fromMap(Map<String, dynamic> map) {
+  return ProductFamilyModel(
+    id: map['ID'] != null ? int.parse(map['ID'].toString()) : null,
+    name: map['name']?.toString() ?? '',
+  );
+}
 
   Map<String, dynamic> toMap() {
     return {

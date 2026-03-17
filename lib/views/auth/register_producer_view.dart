@@ -21,65 +21,63 @@ class RegisterProducerView extends StatefulWidget {
 }
 
 class _RegisterProducerViewState extends State<RegisterProducerView> {
-  /// Controladores para los campos de texto
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
 
-  /// Clave del formulario para validaciones
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-
-  /// Controlador del mapa
   final MapController _mapController = MapController();
 
-  /// Ubicación seleccionada en el mapa
   LatLng? _selectedLocation;
-
-  /// Indica si está cargando la ubicación
   bool _isLoadingLocation = false;
+  bool _isLoadingData = true;
 
-  /// Familias de productos disponibles
   List<ProductFamilyModel> _productFamilies = [];
-
-  /// IDs de familias seleccionadas
   List<int> _selectedFamilyIDs = [];
-
-  /// Modalidades de entrega disponibles
   List<DeliveryModeModel> _deliveryModes = [];
-
-  /// Modalidad de entrega seleccionada
   int? _selectedDeliveryModeID;
 
-  /// Servicios
   final ProductFamilyService _productFamilyService = ProductFamilyService();
   final DeliveryModeService _deliveryModeService = DeliveryModeService();
 
   @override
   void initState() {
     super.initState();
-    /// Solicita permisos y carga datos al abrir la pantalla
     _requestLocationPermission();
     _loadData();
   }
 
-  /// Solicita permisos de ubicación al usuario
   Future<void> _requestLocationPermission() async {
     await Geolocator.requestPermission();
   }
 
-  /// Carga las familias de productos y modalidades de entrega desde la BD
-  Future<void> _loadData() async {
-    final families = await _productFamilyService.getAll();
-    final modes = await _deliveryModeService.getAll();
-    setState(() {
-      _productFamilies = families;
-      _deliveryModes = modes;
-    });
-  }
+ Future<void> _loadData() async {
+  try {
+    setState(() => _isLoadingData = true);
 
-  /// Libera los recursos al destruir el widget
+    print('Iniciando carga de datos...');
+    final families = await _productFamilyService.getAll();
+    print('Familias: ${families.length}');
+    final modes = await _deliveryModeService.getAll();
+    print('Modos: ${modes.length}');
+
+    if (mounted) {
+      setState(() {
+        _productFamilies = families;
+        _deliveryModes = modes;
+        _isLoadingData = false;
+      });
+    }
+  } catch (e) {
+    print('Error en _loadData: $e');
+    if (mounted) {
+      setState(() => _isLoadingData = false);
+    }
+  }
+}
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -90,7 +88,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
     super.dispose();
   }
 
-  /// Obtiene la ubicación actual del dispositivo
   Future<void> _getCurrentLocation() async {
     setState(() => _isLoadingLocation = true);
 
@@ -119,7 +116,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
     setState(() => _isLoadingLocation = false);
   }
 
-  /// Maneja el tap en el mapa para seleccionar ubicación
   Future<void> _onMapTap(TapPosition tapPosition, LatLng location) async {
     setState(() => _selectedLocation = location);
 
@@ -133,7 +129,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
     }
   }
 
-  /// Maneja el registro del productor
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -154,7 +149,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
     final controller = Provider.of<UserController>(context, listen: false);
 
-    /// Crea el modelo de usuario con rol 1 (productor)
     final user = UserModel(
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
@@ -201,7 +195,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Column(
             children: [
-              /// Icono superior
               Container(
                 width: 60,
                 height: 60,
@@ -218,7 +211,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
               const SizedBox(height: 16),
 
-              /// Título
               const Text(
                 'Registro de Productor',
                 style: TextStyle(
@@ -230,7 +222,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
               const SizedBox(height: 8),
 
-              /// Subtítulo
               const Text(
                 'Registra tu empresa y comienza a vender\na restaurantes',
                 textAlign: TextAlign.center,
@@ -239,7 +230,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
               const SizedBox(height: 24),
 
-              /// Formulario
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -258,7 +248,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      /// Campo nombre de empresa
                       _buildLabel('Nombre de la empresa'),
                       _buildTextField(
                         controller: _nameController,
@@ -274,7 +263,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
                       const SizedBox(height: 16),
 
-                      /// Campo descripción
                       _buildLabel('Descripción de la empresa'),
                       TextFormField(
                         controller: _descriptionController,
@@ -300,7 +288,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
                       const SizedBox(height: 16),
 
-                      /// Campo teléfono
                       _buildLabel('Número de teléfono'),
                       _buildTextField(
                         controller: _phoneController,
@@ -317,7 +304,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
                       const SizedBox(height: 16),
 
-                      /// Campo email
                       _buildLabel('Correo electrónico'),
                       _buildTextField(
                         controller: _emailController,
@@ -337,7 +323,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
                       const SizedBox(height: 16),
 
-                      /// Campo dirección
                       _buildLabel('Ubicación de recogida'),
                       TextFormField(
                         controller: _addressController,
@@ -368,7 +353,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
                       const SizedBox(height: 16),
 
-                      /// Mapa
                       Row(
                         children: const [
                           Text(
@@ -392,7 +376,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
                       const SizedBox(height: 8),
 
-                      /// Contenedor del mapa
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: SizedBox(
@@ -433,10 +416,8 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
                       const SizedBox(height: 8),
 
-                      /// Botón seleccionar ubicación actual
                       GestureDetector(
-                        onTap:
-                            _isLoadingLocation ? null : _getCurrentLocation,
+                        onTap: _isLoadingLocation ? null : _getCurrentLocation,
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -471,74 +452,100 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
                       /// Familias de productos
                       _buildLabel('Familias de productos que comercializa'),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _productFamilies.map((family) {
-                          final isSelected =
-                              _selectedFamilyIDs.contains(family.id);
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                if (isSelected) {
-                                  _selectedFamilyIDs.remove(family.id);
-                                } else {
-                                  _selectedFamilyIDs.add(family.id!);
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
+                      _isLoadingData
+                          ? const Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFF5A8A5A),
                               ),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? const Color(0xFF5A8A5A)
-                                    : const Color(0xFFF5F0E8),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                family.name,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : const Color(0xFF2D2D2D),
-                                  fontWeight: FontWeight.w500,
+                            )
+                          : _productFamilies.isEmpty
+                              ? const Text(
+                                  'No se pudieron cargar las familias',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF888888),
+                                  ),
+                                )
+                              : Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _productFamilies.map((family) {
+                                    final isSelected =
+                                        _selectedFamilyIDs.contains(family.id);
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          if (isSelected) {
+                                            _selectedFamilyIDs
+                                                .remove(family.id);
+                                          } else {
+                                            _selectedFamilyIDs.add(family.id!);
+                                          }
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? const Color(0xFF5A8A5A)
+                                              : const Color(0xFFF5F0E8),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          family.name,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: isSelected
+                                                ? Colors.white
+                                                : const Color(0xFF2D2D2D),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
                                 ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
 
                       const SizedBox(height: 24),
 
                       /// Modalidad de entrega
                       _buildLabel('Modalidad de entrega'),
-                      Column(
-                        children: _deliveryModes.map((mode) {
-                          return RadioListTile<int>(
-                            title: Text(
-                              mode.name,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF2D2D2D),
-                              ),
-                            ),
-                            value: mode.id!,
-                            groupValue: _selectedDeliveryModeID,
-                            activeColor: const Color(0xFF5A8A5A),
-                            contentPadding: EdgeInsets.zero,
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedDeliveryModeID = value;
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
+                      _isLoadingData
+                          ? const SizedBox()
+                          : _deliveryModes.isEmpty
+                              ? const Text(
+                                  'No se pudieron cargar las modalidades',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF888888),
+                                  ),
+                                )
+                              : Column(
+                                  children: _deliveryModes.map((mode) {
+                                    return RadioListTile<int>(
+                                      title: Text(
+                                        mode.name,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: Color(0xFF2D2D2D),
+                                        ),
+                                      ),
+                                      value: mode.id!,
+                                      groupValue: _selectedDeliveryModeID,
+                                      activeColor: const Color(0xFF5A8A5A),
+                                      contentPadding: EdgeInsets.zero,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _selectedDeliveryModeID = value;
+                                        });
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
 
                       const SizedBox(height: 24),
 
@@ -580,7 +587,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
 
               const SizedBox(height: 24),
 
-              /// Ya tienes cuenta
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -613,7 +619,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
     );
   }
 
-  /// Widget reutilizable para los labels de los campos
   Widget _buildLabel(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -628,7 +633,6 @@ class _RegisterProducerViewState extends State<RegisterProducerView> {
     );
   }
 
-  /// Widget reutilizable para los campos de texto
   Widget _buildTextField({
     required TextEditingController controller,
     required String hint,

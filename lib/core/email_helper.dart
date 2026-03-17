@@ -54,7 +54,47 @@ class EmailHelper {
       return false;
     }
   }
+  /// Envía el código de recuperación de contraseña
+/// Envía el código de recuperación de contraseña
+static Future<bool> sendResetCode({
+  required String toEmail,
+  required String userName,
+  required String code,
+}) async {
+  try {
+    final message = Message()
+      ..from = Address(_email, 'AgroMarket')
+      ..recipients.add(toEmail)
+      ..subject = 'Código de recuperación de contraseña'
+      ..html = '''
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <div style="background-color: #5A8A5A; padding: 20px; text-align: center;">
+            <h1 style="color: white;">AgroMarket</h1>
+          </div>
+          <div style="padding: 30px; background-color: #f5f5f5;">
+            <p>Hola <strong>$userName</strong>,</p>
+            <p>Tu código de recuperación de contraseña es:</p>
+            <div style="background-color: #fff; padding: 15px; 
+              border-radius: 8px; text-align: center; 
+              font-size: 36px; font-weight: bold; 
+              color: #5A8A5A; letter-spacing: 8px;">
+              $code
+            </div>
+            <p style="color: #888; font-size: 13px;">
+              Este código expira en 15 minutos.
+              Si no solicitaste este código ignora este mensaje.
+            </p>
+          </div>
+        </div>
+      ''';
 
+    await send(message, _smtpServer);
+    return true;
+  } catch (e) {
+    print('Error al enviar código de reset: $e');
+    return false;
+  }
+}
   /// Envía un email de confirmación de cambio de contraseña
   static Future<bool> sendPasswordChanged({
     required String toEmail,

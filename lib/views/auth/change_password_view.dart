@@ -1,35 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
-
-/// Pantalla de cambio de contraseña temporal
+import 'login_view.dart';
+/// Pantalla de cambio de contraseña
+/// Soporta dos flujos: contraseña temporal y reset por código
 /// Principio S de SOLID: solo maneja la UI del cambio de contraseña
 class ChangePasswordView extends StatefulWidget {
-  const ChangePasswordView({super.key});
+  /// Si es true viene del flujo de reset de contraseña
+  final bool isPasswordReset;
+  final String? email;
+  final String? code;
+
+  const ChangePasswordView({
+    super.key,
+    this.isPasswordReset = false,
+    this.email,
+    this.code,
+  });
 
   @override
   State<ChangePasswordView> createState() => _ChangePasswordViewState();
 }
 
 class _ChangePasswordViewState extends State<ChangePasswordView> {
-  /// Controladores para los campos de texto
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
-
-  /// Clave del formulario para validaciones
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  /// Controla si las contraseñas son visibles
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
-
-  /// Validaciones en tiempo real
   bool _hasMinLength = false;
   bool _hasUpperCase = false;
   bool _hasNumber = false;
 
-  /// Libera los recursos al destruir el widget
   @override
   void dispose() {
     _passwordController.dispose();
@@ -37,7 +41,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
     super.dispose();
   }
 
-  /// Valida los requisitos de la contraseña en tiempo real
   void _validatePassword(String value) {
     setState(() {
       _hasMinLength = value.length >= 8;
@@ -46,25 +49,41 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
     });
   }
 
-  /// Maneja el cambio de contraseña
   Future<void> _handleChangePassword() async {
     if (!_formKey.currentState!.validate()) return;
 
     final controller = Provider.of<UserController>(context, listen: false);
-    final success =
-        await controller.changePassword(_passwordController.text.trim());
+    bool success = false;
+
+    if (widget.isPasswordReset) {
+      /// Flujo de reset — usa email y código
+      success = await controller.completePasswordReset(
+        widget.email!,
+        widget.code!,
+        _passwordController.text.trim(),
+      );
+    } else {
+      /// Flujo de contraseña temporal
+      success =
+          await controller.changePassword(_passwordController.text.trim());
+    }
 
     if (!mounted) return;
 
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Contraseña actualizada exitosamente'),
-          backgroundColor: Color(0xFF5A8A5A),
-        ),
-      );
-      /// TODO: navegar al dashboard según el rol
-    } else {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Contraseña actualizada exitosamente'),
+      backgroundColor: Color(0xFF5A8A5A),
+    ),
+  );
+  /// Navega al login limpiando todo el stack
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(builder: (context) => const LoginView()),
+    (route) => false,
+  );
+}else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
@@ -78,7 +97,17 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F0E8),
-      /// Evita que el usuario regrese sin cambiar la contraseña
+        appBar: AppBar(
+    backgroundColor: const Color(0xFFF5F0E8),
+    elevation: 0,
+    leading: IconButton(
+      icon: const Icon(
+        Icons.arrow_back,
+        color: Color(0xFF2D2D2D),
+      ),
+      onPressed: () => Navigator.pop(context),
+    ),
+  ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -86,7 +115,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
             children: [
               const SizedBox(height: 40),
 
-              /// Icono superior
               Container(
                 width: 70,
                 height: 70,
@@ -103,7 +131,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
               const SizedBox(height: 24),
 
-              /// Título
               const Text(
                 'Crea tu contraseña',
                 style: TextStyle(
@@ -115,7 +142,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
               const SizedBox(height: 8),
 
-              /// Subtítulo
               const Text(
                 'Por seguridad, debes establecer una nueva\ncontraseña para continuar',
                 textAlign: TextAlign.center,
@@ -127,7 +153,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
               const SizedBox(height: 32),
 
-              /// Formulario
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -146,7 +171,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      /// Label nueva contraseña
                       const Text(
                         'Nueva contraseña',
                         style: TextStyle(
@@ -158,7 +182,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
                       const SizedBox(height: 8),
 
-                      /// Campo nueva contraseña
                       TextFormField(
                         controller: _passwordController,
                         obscureText: !_isPasswordVisible,
@@ -206,7 +229,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
                       const SizedBox(height: 12),
 
-                      /// Indicadores de requisitos en tiempo real
                       _buildRequirement('Mínimo 8 caracteres', _hasMinLength),
                       _buildRequirement(
                           'Al menos una letra mayúscula', _hasUpperCase),
@@ -214,7 +236,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
                       const SizedBox(height: 16),
 
-                      /// Label confirmar contraseña
                       const Text(
                         'Confirmar contraseña',
                         style: TextStyle(
@@ -226,7 +247,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
                       const SizedBox(height: 8),
 
-                      /// Campo confirmar contraseña
                       TextFormField(
                         controller: _confirmPasswordController,
                         obscureText: !_isConfirmPasswordVisible,
@@ -268,7 +288,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
 
                       const SizedBox(height: 24),
 
-                      /// Botón guardar
                       Consumer<UserController>(
                         builder: (context, controller, child) {
                           return SizedBox(
@@ -312,7 +331,6 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
     );
   }
 
-  /// Widget para mostrar los requisitos de la contraseña en tiempo real
   Widget _buildRequirement(String text, bool isMet) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -321,14 +339,16 @@ class _ChangePasswordViewState extends State<ChangePasswordView> {
           Icon(
             isMet ? Icons.check_circle : Icons.circle_outlined,
             size: 14,
-            color: isMet ? const Color(0xFF5A8A5A) : const Color(0xFF888888),
+            color:
+                isMet ? const Color(0xFF5A8A5A) : const Color(0xFF888888),
           ),
           const SizedBox(width: 6),
           Text(
             text,
             style: TextStyle(
               fontSize: 12,
-              color: isMet ? const Color(0xFF5A8A5A) : const Color(0xFF888888),
+              color:
+                  isMet ? const Color(0xFF5A8A5A) : const Color(0xFF888888),
             ),
           ),
         ],

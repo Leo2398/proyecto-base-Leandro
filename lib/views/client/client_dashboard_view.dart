@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
+import '../auth/login_view.dart';
 
 /// Dashboard principal del cliente
 /// Principio S de SOLID: solo maneja la UI del dashboard del cliente
@@ -48,58 +49,79 @@ class ClientDashboardView extends StatelessWidget {
                 ],
               ),
               actions: [
-                /// Balance del usuario
-                Consumer<UserController>(
-                  builder: (context, controller, child) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.monetization_on_outlined,
-                            color: Color(0xFFB8860B),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${controller.currentUser?.balance.toStringAsFixed(0) ?? '0'}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF2D2D2D),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(width: 8),
+  /// Balance del usuario
+  Consumer<UserController>(
+    builder: (context, controller, child) {
+      return Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 6,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.monetization_on_outlined,
+              color: Color(0xFFB8860B),
+              size: 18,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '${controller.currentUser?.balance.toStringAsFixed(0) ?? '0'}',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D2D2D),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  ),
+  const SizedBox(width: 4),
 
-                /// Botón de configuración
-                IconButton(
-                  onPressed: () {
-                    // TODO: navegar a configuración
-                  },
-                  icon: const Icon(
-                    Icons.settings_outlined,
-                    color: Color(0xFF2D2D2D),
-                  ),
-                ),
-              ],
+  /// Botón de configuración
+  IconButton(
+    onPressed: () {
+      // TODO: navegar a configuración
+    },
+    icon: const Icon(
+      Icons.settings_outlined,
+      color: Color(0xFF2D2D2D),
+    ),
+  ),
+
+  /// Botón de cerrar sesión
+  IconButton(
+    onPressed: () async {
+      final controller = Provider.of<UserController>(context, listen: false);
+      await controller.logout();
+      if (context.mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginView()),
+          (route) => false,
+        );
+      }
+    },
+    icon: const Icon(
+      Icons.logout,
+      color: Color(0xFF2D2D2D),
+    ),
+  ),
+
+  const SizedBox(width: 4),
+],
             ),
 
             /// Contenido principal
