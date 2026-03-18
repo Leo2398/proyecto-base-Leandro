@@ -54,6 +54,27 @@ class UserService implements IUserService {
       return null;
     }
   }
+  @override
+  Future<List<UserModel>> getAllProducers() async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        '''
+      SELECT *
+      FROM User
+      WHERE role = 1 AND state = 1
+      ORDER BY name ASC
+      ''',
+      );
+
+      return result.rows
+          .map((row) => UserModel.fromMap(row.assoc()))
+          .toList();
+    } catch (e) {
+      print('Error en getAllProducers: $e');
+      return [];
+    }
+  }
 
   /// Registra un nuevo usuario en la BD
   /// Guarda Location, PickupLocation y User en orden

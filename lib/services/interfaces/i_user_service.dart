@@ -10,6 +10,9 @@ abstract class IUserService {
   /// Obtiene un usuario por su email
   Future<UserModel?> getUserByEmail(String email);
 
+  /// Obtiene todos los productores activos
+  Future<List<UserModel>> getAllProducers();
+
   /// Registra un nuevo usuario en la BD
   Future<bool> createUser(UserModel user,
       {double? latitude,

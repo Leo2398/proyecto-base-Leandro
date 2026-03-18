@@ -4,6 +4,9 @@ import 'controllers/user_controller.dart';
 import 'views/auth/login_view.dart';
 import 'views/client/client_dashboard_view.dart';
 import 'views/admin/admin_dashboard_view.dart';
+import 'views/producer/producer_dashboard_view.dart';
+import 'controllers/product_controller.dart';
+import 'services/product_service.dart';
 void main() {
   runApp(const MyApp());
 }
@@ -16,6 +19,9 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => UserController()),
+        ChangeNotifierProvider(
+          create: (_) => ProductController(productService: ProductService()),
+        ),
       ],
       child: MaterialApp(
         title: 'Agro App',
@@ -46,7 +52,7 @@ class MyApp extends StatelessWidget {
         return const ClientDashboardView();
       } else if (role == 1) {
         /// TODO: return ProducerDashboardView
-        return const ClientDashboardView();
+        return const ProducerDashboardView();
       }
       else if (role == 2) {
     return const AdminDashboardView();
