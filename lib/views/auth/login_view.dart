@@ -6,6 +6,7 @@ import 'change_password_view.dart';
 import '../client/client_dashboard_view.dart';
 import 'forgot_password_view.dart';
 import '../admin/admin_dashboard_view.dart';
+import '../producer/producer_dashboard_view.dart';
 /// Pantalla de inicio de sesión
 /// Principio S de SOLID: solo maneja la UI del login
 class LoginView extends StatefulWidget {
@@ -67,6 +68,14 @@ class _LoginViewState extends State<LoginView> {
       ),
     );
   }
+      else if (controller.currentUser!.role == 1) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ProducerDashboardView(),
+          ),
+        );
+      }
   else if (controller.currentUser!.role == 2) {
     Navigator.pushReplacement(
       context,

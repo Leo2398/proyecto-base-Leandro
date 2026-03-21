@@ -27,6 +27,8 @@ class UserController extends ChangeNotifier {
   /// Usuario actualmente logueado
   UserModel? _currentUser;
 
+  List<UserModel> _producers = [];
+
   /// Indica si hay una operación en progreso
   bool _isLoading = false;
 
@@ -48,6 +50,7 @@ class UserController extends ChangeNotifier {
 
   /// Getters para acceder al estado desde la UI
   UserModel? get currentUser => _currentUser;
+  List<UserModel> get producers => _producers;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isLoggedIn => _currentUser != null;
@@ -205,6 +208,21 @@ class UserController extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Error en el registro del productor: $e';
       return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> getAllProducers() async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      _producers = await _userService.getAllProducers();
+    } catch (e) {
+      _errorMessage = 'Error al cargar productores';
     } finally {
       _isLoading = false;
       notifyListeners();

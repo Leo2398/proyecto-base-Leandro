@@ -2,11 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
+import 'client_producer_products_view.dart';
 
 /// Dashboard principal del cliente
 /// Principio S de SOLID: solo maneja la UI del dashboard del cliente
-class ClientDashboardView extends StatelessWidget {
+class ClientDashboardView extends StatefulWidget {
   const ClientDashboardView({super.key});
+
+  @override
+  State<ClientDashboardView> createState() => _ClientDashboardViewState();
+}
+
+class _ClientDashboardViewState extends State<ClientDashboardView> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<UserController>().getAllProducers();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -191,35 +205,68 @@ class ClientDashboardView extends StatelessWidget {
                   const SizedBox(height: 12),
 
                   /// Lista de productores
-                  const _ProducerCard(
-                    name: 'FreshFarm Co.',
-                    description:
-                        'Especialistas en productos orgánicos certificados con más de 15 años de experiencia en agricultura sustentable.',
-                    families: ['Vegetales', 'Frutas', 'Hierbas'],
-                    rating: 4.8,
-                    reviews: 127,
-                  ),
+                  Consumer<UserController>(
+                    builder: (context, controller, child) {
+                      if (controller.isLoading && controller.producers.isEmpty) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF5A8A5A),
+                            ),
+                          ),
+                        );
+                      }
 
-                  const SizedBox(height: 12),
+                      if (controller.producers.isEmpty) {
+                        return Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: const Text(
+                            'No hay productores disponibles.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF888888),
+                            ),
+                          ),
+                        );
+                      }
 
-                  const _ProducerCard(
-                    name: 'Verde Vital',
-                    description:
-                        'Innovadores en cultivos hidropónicos y verticales, ofreciendo productos frescos durante todo el año con tecnología avanzada.',
-                    families: ['Hidropónicos', 'Lechugas', 'Microgreens'],
-                    rating: 4.6,
-                    reviews: 89,
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  const _ProducerCard(
-                    name: 'AgroSur',
-                    description:
-                        'Productores líderes en frutas tropicales y subtropicales, con certificaciones internacionales de calidad y trazabilidad.',
-                    families: ['Frutas tropicales', 'Paitas', 'Cítricos'],
-                    rating: 4.9,
-                    reviews: 203,
+                      return Column(
+                        children: [
+                          ...controller.producers.map((producer) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _ProducerCard(
+                                name: producer.name,
+                                description: producer.description?.isNotEmpty == true
+                                    ? producer.description!
+                                    : 'Productor agrícola disponible en AgroMarket.',
+                                onViewProducts: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ClientProducerProductsView(producer: producer),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          }),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 24),
@@ -397,16 +444,12 @@ class _ProductCard extends StatelessWidget {
 class _ProducerCard extends StatelessWidget {
   final String name;
   final String description;
-  final List<String> families;
-  final double rating;
-  final int reviews;
+  final VoidCallback onViewProducts;
 
   const _ProducerCard({
     required this.name,
     required this.description,
-    required this.families,
-    required this.rating,
-    required this.reviews,
+    required this.onViewProducts,
   });
 
   @override
@@ -427,7 +470,6 @@ class _ProducerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// Nombre del productor
           Text(
             name,
             style: const TextStyle(
@@ -436,10 +478,7 @@ class _ProducerCard extends StatelessWidget {
               color: Color(0xFF2D2D2D),
             ),
           ),
-
           const SizedBox(height: 6),
-
-          /// Descripción
           Text(
             description,
             style: const TextStyle(
@@ -449,82 +488,29 @@ class _ProducerCard extends StatelessWidget {
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
           ),
-
-          const SizedBox(height: 10),
-
-          /// Familias de productos
-          Wrap(
-            spacing: 6,
-            children: families.map((family) {
-              return Container(
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: onViewProducts,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF5A8A5A),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F0E8),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  family,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF5A8A5A),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-
-          const SizedBox(height: 10),
-
-          /// Rating y botón
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.star,
-                    size: 16,
-                    color: Color(0xFFB8860B),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$rating ($reviews reseñas)',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF888888),
-                    ),
-                  ),
-                ],
-              ),
-
-              /// Botón ver productos
-              ElevatedButton(
-                onPressed: () {
-                  // TODO: navegar a productos del productor
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF5A8A5A),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                ),
-                child: const Text(
-                  'Ver productos',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.white,
-                  ),
+                  horizontal: 16,
+                  vertical: 8,
                 ),
               ),
-            ],
+              child: const Text(
+                'Ver productos',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white,
+                ),
+              ),
+            ),
           ),
         ],
       ),
