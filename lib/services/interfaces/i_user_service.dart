@@ -23,6 +23,9 @@ abstract class IUserService {
   /// Actualiza los datos de un usuario
   Future<bool> updateUser(UserModel user);
 
+  /// Actualiza el perfil editable del usuario (nombre, email, teléfono, imagen)
+  Future<bool> updateUserProfile(UserModel user);
+
   /// Actualiza el balance de un usuario
   Future<bool> updateBalance(int id, double amount);
 

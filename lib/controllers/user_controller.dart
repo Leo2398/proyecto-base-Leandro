@@ -316,6 +316,131 @@ class UserController extends ChangeNotifier {
     }
   }
 
+  /// Actualiza el perfil del usuario actual (nombre, email, teléfono, imagen)
+  Future<bool> updateProfile({
+    required String name,
+    required String email,
+    required String cellphone,
+    String? image,
+  }) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      if (_currentUser == null) {
+        _errorMessage = 'No hay usuario logueado';
+        return false;
+      }
+
+      if (name.trim().isEmpty) {
+        _errorMessage = 'El nombre no puede estar vacío';
+        return false;
+      }
+
+      if (email.trim().isEmpty) {
+        _errorMessage = 'El correo no puede estar vacío';
+        return false;
+      }
+
+      /// Si el email cambió, verifica que no esté en uso por otro usuario
+      if (email.trim() != _currentUser!.email) {
+        final existing = await _userService.getUserByEmail(email.trim());
+        if (existing != null && existing.id != _currentUser!.id) {
+          _errorMessage = 'Ese correo ya está en uso por otra cuenta';
+          return false;
+        }
+      }
+
+      final updatedUser = UserModel(
+        id: _currentUser!.id,
+        name: name.trim(),
+        image: image ?? _currentUser!.image,
+        balance: _currentUser!.balance,
+        email: email.trim(),
+        password: _currentUser!.password,
+        description: _currentUser!.description,
+        role: _currentUser!.role,
+        cellphone: cellphone.trim().isEmpty ? null : cellphone.trim(),
+        deliveryModeID: _currentUser!.deliveryModeID,
+        pickUpLocationID: _currentUser!.pickUpLocationID,
+        state: _currentUser!.state,
+      );
+
+      final success = await _userService.updateUserProfile(updatedUser);
+
+      if (success) {
+        _currentUser = updatedUser;
+        await SessionHelper.saveSession(_currentUser!);
+      } else {
+        _errorMessage = 'Error al actualizar el perfil';
+      }
+
+      return success;
+    } catch (e) {
+      _errorMessage = 'Error al actualizar el perfil: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Cambia la contraseña verificando primero la contraseña actual
+  Future<bool> changePasswordWithVerification({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      if (_currentUser == null) {
+        _errorMessage = 'No hay usuario logueado';
+        return false;
+      }
+
+      if (!EncryptionHelper.verifyPassword(currentPassword, _currentUser!.password)) {
+        _errorMessage = 'La contraseña actual es incorrecta';
+        return false;
+      }
+
+      if (newPassword.length < 8) {
+        _errorMessage = 'La nueva contraseña debe tener mínimo 8 caracteres';
+        return false;
+      }
+
+      if (newPassword != confirmPassword) {
+        _errorMessage = 'Las contraseñas nuevas no coinciden';
+        return false;
+      }
+
+      if (EncryptionHelper.isTempPassword(newPassword)) {
+        _errorMessage = 'No puedes usar una contraseña temporal';
+        return false;
+      }
+
+      final success = await (_userService as UserService).updatePassword(
+        _currentUser!.id!,
+        newPassword,
+        _currentUser!.email,
+        _currentUser!.name,
+      );
+
+      if (!success) _errorMessage = 'Error al cambiar la contraseña';
+
+      return success;
+    } catch (e) {
+      _errorMessage = 'Error al cambiar contraseña: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Cierra la sesión del usuario actual
   Future<void> logout() async {
     await SessionHelper.clearSession();

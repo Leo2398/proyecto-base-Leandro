@@ -195,6 +195,30 @@ class UserService implements IUserService {
     }
   }
 
+  /// Actualiza el perfil editable del usuario (nombre, email, teléfono, imagen)
+  @override
+  Future<bool> updateUserProfile(UserModel user) async {
+    try {
+      final conn = await _db.getConnection();
+      await conn.execute(
+        '''UPDATE User SET name = :name, email = :email,
+        cellphone = :cellphone, image = :image
+        WHERE ID = :id''',
+        {
+          'name': user.name,
+          'email': user.email,
+          'cellphone': user.cellphone,
+          'image': user.image,
+          'id': user.id,
+        },
+      );
+      return true;
+    } catch (e) {
+      print('Error en updateUserProfile: $e');
+      return false;
+    }
+  }
+
   /// Actualiza el balance de un usuario
   @override
   Future<bool> updateBalance(int id, double amount) async {

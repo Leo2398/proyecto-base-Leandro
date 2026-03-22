@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
+import 'admin_settings_view.dart';
 
 /// Dashboard principal del administrador
 /// Principio S de SOLID: solo maneja la UI del dashboard del admin
@@ -55,7 +56,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                   ),
                   const SizedBox(width: 6),
                   const Text(
-                    'AgroMarket',
+                    'AgroMarket Admin',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -66,43 +67,40 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
               ),
               actions: [
                 IconButton(
-                  onPressed: () {
-                    // TODO: navegar a notificaciones
-                  },
+                  onPressed: () {},
                   icon: const Icon(
                     Icons.notifications_outlined,
                     color: Color(0xFF2D2D2D),
                   ),
                 ),
-                IconButton(
-                  onPressed: () {
-                    // TODO: navegar a configuración
+                Consumer<UserController>(
+                  builder: (_, ctrl, __) {
+                    final img = ctrl.currentUser?.image;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const AdminSettingsView()),
+                          );
+                        },
+                        child: CircleAvatar(
+                          radius: 17,
+                          backgroundColor: const Color(0xFFD4A017),
+                          backgroundImage: (img != null && img.isNotEmpty)
+                              ? NetworkImage(img)
+                              : null,
+                          child: (img == null || img.isEmpty)
+                              ? const Icon(Icons.person,
+                                  color: Colors.white, size: 18)
+                              : null,
+                        ),
+                      ),
+                    );
                   },
-                  icon: const Icon(
-                    Icons.settings_outlined,
-                    color: Color(0xFF2D2D2D),
-                  ),
                 ),
-                IconButton(
-                  onPressed: () async {
-                    final controller =
-                        Provider.of<UserController>(context, listen: false);
-                    await controller.logout();
-                    if (context.mounted) {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const LoginView()),
-                        (route) => false,
-                      );
-                    }
-                  },
-                  icon: const Icon(
-                    Icons.logout,
-                    color: Color(0xFF2D2D2D),
-                  ),
-                ),
-                const SizedBox(width: 4),
               ],
             ),
 
@@ -324,7 +322,11 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
               label: 'Configuraciones',
               onTap: () {
                 Navigator.pop(context);
-                // TODO: navegar a configuraciones
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const AdminSettingsView()),
+                );
               },
             ),
 
