@@ -28,6 +28,7 @@ class UserController extends ChangeNotifier {
   UserModel? _currentUser;
 
   List<UserModel> _producers = [];
+  List<UserModel> _admins = [];
 
   /// Indica si hay una operación en progreso
   bool _isLoading = false;
@@ -51,6 +52,7 @@ class UserController extends ChangeNotifier {
   /// Getters para acceder al estado desde la UI
   UserModel? get currentUser => _currentUser;
   List<UserModel> get producers => _producers;
+  List<UserModel> get admins => _admins;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isLoggedIn => _currentUser != null;
@@ -434,6 +436,184 @@ class UserController extends ChangeNotifier {
       return success;
     } catch (e) {
       _errorMessage = 'Error al cambiar contraseña: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ----------------------------------------------------------------- ADMINS CRUD
+
+  /// Carga todos los administradores del sistema
+  Future<void> loadAdmins() async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+      _admins = await _userService.getAllAdmins();
+    } catch (e) {
+      _errorMessage = 'Error al cargar administradores';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Crea un nuevo administrador con contraseña directa
+  Future<bool> createAdmin({
+    required String name,
+    required String email,
+    required String password,
+    required String confirmPassword,
+    required int state,
+  }) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      if (name.trim().isEmpty) {
+        _errorMessage = 'El nombre no puede estar vacío';
+        return false;
+      }
+      if (email.trim().isEmpty) {
+        _errorMessage = 'El correo no puede estar vacío';
+        return false;
+      }
+      if (password.length < 8) {
+        _errorMessage = 'La contraseña debe tener mínimo 8 caracteres';
+        return false;
+      }
+      if (password != confirmPassword) {
+        _errorMessage = 'Las contraseñas no coinciden';
+        return false;
+      }
+
+      final existing = await _userService.getUserByEmail(email.trim());
+      if (existing != null) {
+        _errorMessage = 'Ese correo ya está registrado';
+        return false;
+      }
+
+      final newAdmin = UserModel(
+        name: name.trim(),
+        email: email.trim(),
+        password: '',
+        role: 2,
+        state: state,
+      );
+
+      final success = await _userService.createAdminUser(newAdmin, password);
+      if (success) {
+        await loadAdmins();
+      } else {
+        _errorMessage = 'Error al crear el administrador';
+      }
+      return success;
+    } catch (e) {
+      _errorMessage = 'Error al crear administrador: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Actualiza los datos de un administrador existente
+  Future<bool> updateAdminUser({
+    required UserModel admin,
+    required String name,
+    required String email,
+    required String cellphone,
+    required int state,
+    String? newPassword,
+    String? confirmPassword,
+  }) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      if (name.trim().isEmpty) {
+        _errorMessage = 'El nombre no puede estar vacío';
+        return false;
+      }
+      if (email.trim().isEmpty) {
+        _errorMessage = 'El correo no puede estar vacío';
+        return false;
+      }
+
+      if (newPassword != null && newPassword.isNotEmpty) {
+        if (newPassword.length < 8) {
+          _errorMessage = 'La contraseña debe tener mínimo 8 caracteres';
+          return false;
+        }
+        if (newPassword != confirmPassword) {
+          _errorMessage = 'Las contraseñas no coinciden';
+          return false;
+        }
+      }
+
+      if (email.trim() != admin.email) {
+        final existing = await _userService.getUserByEmail(email.trim());
+        if (existing != null && existing.id != admin.id) {
+          _errorMessage = 'Ese correo ya está en uso';
+          return false;
+        }
+      }
+
+      final updated = UserModel(
+        id: admin.id,
+        name: name.trim(),
+        email: email.trim(),
+        password: admin.password,
+        role: 2,
+        cellphone: cellphone.trim().isEmpty ? null : cellphone.trim(),
+        state: state,
+        image: admin.image,
+        balance: admin.balance,
+        description: admin.description,
+      );
+
+      final success = await _userService.updateAdmin(
+        updated,
+        newPassword: (newPassword != null && newPassword.isNotEmpty)
+            ? newPassword
+            : null,
+      );
+
+      if (success) {
+        await loadAdmins();
+      } else {
+        _errorMessage = 'Error al actualizar el administrador';
+      }
+      return success;
+    } catch (e) {
+      _errorMessage = 'Error al actualizar administrador: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Elimina lógicamente un administrador
+  Future<bool> deleteAdminUser(int id) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      final success = await _userService.deleteAdmin(id);
+      if (success) {
+        await loadAdmins();
+      } else {
+        _errorMessage = 'Error al eliminar el administrador';
+      }
+      return success;
+    } catch (e) {
+      _errorMessage = 'Error al eliminar administrador: $e';
       return false;
     } finally {
       _isLoading = false;

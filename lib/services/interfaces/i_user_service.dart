@@ -26,6 +26,18 @@ abstract class IUserService {
   /// Actualiza el perfil editable del usuario (nombre, email, teléfono, imagen)
   Future<bool> updateUserProfile(UserModel user);
 
+  /// Obtiene todos los administradores del sistema (role = 2)
+  Future<List<UserModel>> getAllAdmins();
+
+  /// Crea un administrador con contraseña directa (sin temporal)
+  Future<bool> createAdminUser(UserModel user, String password);
+
+  /// Elimina lógicamente un administrador (state = 0)
+  Future<bool> deleteAdmin(int id);
+
+  /// Actualiza los datos de un administrador (nombre, email, teléfono, estado)
+  Future<bool> updateAdmin(UserModel user, {String? newPassword});
+
   /// Actualiza el balance de un usuario
   Future<bool> updateBalance(int id, double amount);
 

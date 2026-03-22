@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
 import 'admin_settings_view.dart';
+import 'admin_users_list_view.dart';
 
 /// Dashboard principal del administrador
 /// Principio S de SOLID: solo maneja la UI del dashboard del admin
@@ -282,7 +283,11 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
               label: 'Crear Usuarios',
               onTap: () {
                 Navigator.pop(context);
-                // TODO: navegar a crear usuarios
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const AdminUsersListView()),
+                );
               },
             ),
             _DrawerItem(

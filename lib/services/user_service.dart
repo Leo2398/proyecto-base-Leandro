@@ -219,6 +219,104 @@ class UserService implements IUserService {
     }
   }
 
+  /// Obtiene todos los administradores del sistema (role = 2)
+  @override
+  Future<List<UserModel>> getAllAdmins() async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        'SELECT * FROM User WHERE role = 2 ORDER BY name ASC',
+      );
+      return result.rows
+          .map((row) => UserModel.fromMap(row.assoc()))
+          .toList();
+    } catch (e) {
+      print('Error en getAllAdmins: $e');
+      return [];
+    }
+  }
+
+  /// Crea un administrador con contraseña directa (sin contraseña temporal)
+  @override
+  Future<bool> createAdminUser(UserModel user, String password) async {
+    try {
+      final conn = await _db.getConnection();
+      final hashedPassword = EncryptionHelper.hashPassword(password);
+      await conn.execute(
+        '''INSERT INTO User (name, email, password, role, cellphone, state)
+        VALUES (:name, :email, :password, 2, :cellphone, :state)''',
+        {
+          'name': user.name,
+          'email': user.email,
+          'password': hashedPassword,
+          'cellphone': user.cellphone,
+          'state': user.state,
+        },
+      );
+      return true;
+    } catch (e) {
+      print('Error en createAdminUser: $e');
+      return false;
+    }
+  }
+
+  /// Elimina lógicamente un administrador (state = 0)
+  @override
+  Future<bool> deleteAdmin(int id) async {
+    try {
+      final conn = await _db.getConnection();
+      await conn.execute(
+        'UPDATE User SET state = 0 WHERE ID = :id AND role = 2',
+        {'id': id},
+      );
+      return true;
+    } catch (e) {
+      print('Error en deleteAdmin: $e');
+      return false;
+    }
+  }
+
+  /// Actualiza datos de un administrador; si newPassword no es null también cambia la contraseña
+  @override
+  Future<bool> updateAdmin(UserModel user, {String? newPassword}) async {
+    try {
+      final conn = await _db.getConnection();
+      if (newPassword != null && newPassword.isNotEmpty) {
+        final hashed = EncryptionHelper.hashPassword(newPassword);
+        await conn.execute(
+          '''UPDATE User SET name = :name, email = :email,
+          cellphone = :cellphone, state = :state, password = :password
+          WHERE ID = :id AND role = 2''',
+          {
+            'name': user.name,
+            'email': user.email,
+            'cellphone': user.cellphone,
+            'state': user.state,
+            'password': hashed,
+            'id': user.id,
+          },
+        );
+      } else {
+        await conn.execute(
+          '''UPDATE User SET name = :name, email = :email,
+          cellphone = :cellphone, state = :state
+          WHERE ID = :id AND role = 2''',
+          {
+            'name': user.name,
+            'email': user.email,
+            'cellphone': user.cellphone,
+            'state': user.state,
+            'id': user.id,
+          },
+        );
+      }
+      return true;
+    } catch (e) {
+      print('Error en updateAdmin: $e');
+      return false;
+    }
+  }
+
   /// Actualiza el balance de un usuario
   @override
   Future<bool> updateBalance(int id, double amount) async {
