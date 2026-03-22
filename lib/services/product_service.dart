@@ -1,11 +1,45 @@
 import '../core/db_connection.dart';
 import '../models/product_model.dart';
+import '../models/report_models.dart';
 import 'interfaces/i_product_service.dart';
 
 /// Implementación del servicio de productos
 /// Principio S de SOLID: solo maneja operaciones de BD para productos
 class ProductService implements IProductService {
   final DBConnection _db = DBConnection.instance;
+
+  /// Top 5 productos más vendidos (por valor de inventario: precio × stock)
+  @override
+  Future<List<TopProductItem>> getTopSellingProducts() async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute('''
+        SELECT p.ID, p.name, p.picture, p.price, p.stock,
+               COALESCE(p.unit, 'unidades') AS unit,
+               u.name AS producerName
+        FROM Product p
+        JOIN User u ON u.ID = p.UserID AND u.state = 1
+        WHERE p.state = 1
+        ORDER BY (p.price * p.stock) DESC
+        LIMIT 5
+      ''');
+      return result.rows.map((row) {
+        final m = row.assoc();
+        return TopProductItem(
+          id: int.tryParse(m['ID']?.toString() ?? '0') ?? 0,
+          nombre: m['name']?.toString() ?? '',
+          producerName: m['producerName']?.toString() ?? '',
+          precio: double.tryParse(m['price']?.toString() ?? '0') ?? 0.0,
+          stock: int.tryParse(m['stock']?.toString() ?? '0') ?? 0,
+          unidad: m['unit']?.toString() ?? 'unidades',
+          picture: m['picture']?.toString(),
+        );
+      }).toList();
+    } catch (e) {
+      print('Error en getTopSellingProducts: $e');
+      return [];
+    }
+  }
 
   /// Obtener productos por productor
   @override

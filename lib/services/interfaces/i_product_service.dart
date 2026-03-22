@@ -1,6 +1,10 @@
 import '../../models/product_model.dart';
+import '../../models/report_models.dart';
 
 abstract class IProductService {
+
+  /// Top productos más vendidos (por valor de inventario)
+  Future<List<TopProductItem>> getTopSellingProducts();
 
   /// Obtener todos los productos de un productor
   Future<List<ProductModel>> getProductsByProducer(int producerID);

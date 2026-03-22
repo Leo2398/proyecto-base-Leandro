@@ -44,6 +44,26 @@ class ProductoReportItem {
   });
 }
 
+class TopProductItem {
+  final int id;
+  final String nombre;
+  final String producerName;
+  final double precio;
+  final int stock;
+  final String unidad;
+  final String? picture;
+
+  const TopProductItem({
+    required this.id,
+    required this.nombre,
+    required this.producerName,
+    required this.precio,
+    required this.stock,
+    required this.unidad,
+    this.picture,
+  });
+}
+
 class SectorReportItem {
   final int id;
   final String nombre;

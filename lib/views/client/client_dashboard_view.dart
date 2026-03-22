@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
+import 'client_best_sellers_view.dart';
 import 'client_producer_products_view.dart';
 
 /// Dashboard principal del cliente
@@ -296,6 +297,11 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
             label: 'Buscar',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.trending_up_outlined),
+            activeIcon: Icon(Icons.trending_up),
+            label: 'Más vendidos',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.shopping_cart_outlined),
             activeIcon: Icon(Icons.shopping_cart),
             label: 'Pedidos',
@@ -307,7 +313,13 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
           ),
         ],
         onTap: (index) {
-          // TODO: navegar a las secciones
+          if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const ClientBestSellersView()),
+            );
+          }
         },
       ),
     );
