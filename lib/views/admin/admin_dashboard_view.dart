@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
@@ -90,8 +91,10 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                         child: CircleAvatar(
                           radius: 17,
                           backgroundColor: const Color(0xFFD4A017),
-                          backgroundImage: (img != null && img.isNotEmpty)
-                              ? NetworkImage(img)
+                          backgroundImage: img != null && img.isNotEmpty
+                              ? (img.startsWith('http')
+                                  ? NetworkImage(img) as ImageProvider
+                                  : FileImage(File(img)))
                               : null,
                           child: (img == null || img.isEmpty)
                               ? const Icon(Icons.person,

@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
@@ -61,6 +63,13 @@ class _AdminSettingsViewState extends State<AdminSettingsView> {
   }
 
   // ------------------------------------------------------------------ helpers
+
+  /// Devuelve el ImageProvider correcto según si la imagen es URL o ruta local
+  ImageProvider? _imageProvider(String? img) {
+    if (img == null || img.isEmpty) return null;
+    if (img.startsWith('http')) return NetworkImage(img);
+    return FileImage(File(img));
+  }
 
   InputDecoration _inputDecoration(String label, {Widget? suffix}) {
     return InputDecoration(
@@ -245,59 +254,31 @@ class _AdminSettingsViewState extends State<AdminSettingsView> {
     );
   }
 
-  void _onChangePhoto() {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        final urlCtrl = TextEditingController(
-          text: Provider.of<UserController>(context, listen: false)
-                  .currentUser
-                  ?.image ??
-              '',
-        );
-        return AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('URL de la foto'),
-          content: TextField(
-            controller: urlCtrl,
-            decoration: const InputDecoration(
-              hintText: 'https://...',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancelar',
-                  style: TextStyle(color: _textSecondary)),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                final controller =
-                    Provider.of<UserController>(context, listen: false);
-                final user = controller.currentUser;
-                if (user == null) return;
-                await controller.updateProfile(
-                  name: user.name,
-                  email: user.email,
-                  cellphone: user.cellphone ?? '',
-                  image: urlCtrl.text.trim().isEmpty
-                      ? null
-                      : urlCtrl.text.trim(),
-                );
-                if (mounted) {
-                  _showMessage('Foto actualizada');
-                }
-              },
-              child: const Text('Guardar',
-                  style: TextStyle(color: _primary)),
-            ),
-          ],
-        );
-      },
+  Future<void> _onChangePhoto() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 512,
+      maxHeight: 512,
     );
+    if (picked == null || !mounted) return;
+
+    final controller = Provider.of<UserController>(context, listen: false);
+    final user = controller.currentUser;
+    if (user == null) return;
+
+    final ok = await controller.updateProfile(
+      name: user.name,
+      email: user.email,
+      cellphone: user.cellphone ?? '',
+      image: picked.path,
+    );
+
+    if (mounted) {
+      _showMessage(ok ? 'Foto actualizada' : (controller.errorMessage ?? 'Error'),
+          error: !ok);
+    }
   }
 
   // ------------------------------------------------------------------- build
@@ -336,8 +317,7 @@ class _AdminSettingsViewState extends State<AdminSettingsView> {
                 child: CircleAvatar(
                   radius: 17,
                   backgroundColor: const Color(0xFFD4A017),
-                  backgroundImage:
-                      (img != null && img.isNotEmpty) ? NetworkImage(img) : null,
+                  backgroundImage: _imageProvider(img),
                   child: (img == null || img.isEmpty)
                       ? const Icon(Icons.person, color: Colors.white, size: 18)
                       : null,
@@ -365,9 +345,7 @@ class _AdminSettingsViewState extends State<AdminSettingsView> {
                           return CircleAvatar(
                             radius: 46,
                             backgroundColor: const Color(0xFFD4A017),
-                            backgroundImage: (img != null && img.isNotEmpty)
-                                ? NetworkImage(img)
-                                : null,
+                            backgroundImage: _imageProvider(img),
                             child: (img == null || img.isEmpty)
                                 ? const Icon(Icons.person,
                                     color: Colors.white, size: 44)
