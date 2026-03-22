@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -7,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
 import '../../models/report_models.dart';
 import '../../services/report_service.dart';
+import 'admin_pdf_preview_view.dart';
 
 enum _DateFilter { hoy, estaSemana, esteMes, esteAnio, personalizado }
 
@@ -19,14 +22,12 @@ class AdminReportsView extends StatefulWidget {
 }
 
 class _AdminReportsViewState extends State<AdminReportsView> {
-  // ----------------------------------------------------------------- colors
   static const _primary = Color(0xFFB8860B);
   static const _primaryLight = Color(0xFFF5EDD0);
   static const _background = Color(0xFFF5F0E8);
   static const _textPrimary = Color(0xFF2D2D2D);
   static const _textSecondary = Color(0xFF888888);
 
-  // ----------------------------------------------------------------- state
   _DateFilter _filter = _DateFilter.hoy;
   DateTime _from = DateTime.now();
   DateTime _to = DateTime.now();
@@ -41,14 +42,13 @@ class _AdminReportsViewState extends State<AdminReportsView> {
 
   final _service = ReportService();
 
-  // ----------------------------------------------------------------- lifecycle
   @override
   void initState() {
     super.initState();
     _applyFilter(_DateFilter.hoy);
   }
 
-  // ----------------------------------------------------------------- date logic
+  // ----------------------------------------------------------------- date
   void _computeRange(_DateFilter f) {
     final now = DateTime.now();
     switch (f) {
@@ -56,9 +56,10 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         _from = DateTime(now.year, now.month, now.day);
         _to = DateTime(now.year, now.month, now.day, 23, 59, 59);
       case _DateFilter.estaSemana:
-        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-        _from = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
-        _to = _from.add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+        final s = now.subtract(Duration(days: now.weekday - 1));
+        _from = DateTime(s.year, s.month, s.day);
+        _to = _from.add(
+            const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
       case _DateFilter.esteMes:
         _from = DateTime(now.year, now.month, 1);
         _to = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
@@ -67,7 +68,8 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         _to = DateTime(now.year, 12, 31, 23, 59, 59);
       case _DateFilter.personalizado:
         _from = _customFrom ?? DateTime(now.year, now.month, 1);
-        _to = _customTo ?? DateTime(now.year, now.month, now.day, 23, 59, 59);
+        _to = _customTo ??
+            DateTime(now.year, now.month, now.day, 23, 59, 59);
     }
   }
 
@@ -114,12 +116,6 @@ class _AdminReportsViewState extends State<AdminReportsView> {
     return '\$${v.toStringAsFixed(0)}';
   }
 
-  double _growthPct(List<double> vals, int idx) {
-    if (vals.isEmpty || vals[idx] == 0) return 0;
-    final total = vals.fold(0.0, (a, b) => a + b);
-    return total == 0 ? 0 : (vals[idx] / total) * 100;
-  }
-
   String _sectorEmoji(String name) {
     final n = name.toLowerCase();
     if (n.contains('frut')) return '🍎';
@@ -141,22 +137,15 @@ class _AdminReportsViewState extends State<AdminReportsView> {
     return 'Sector activo';
   }
 
-  // ----------------------------------------------------------------- PDF
-  Future<void> _downloadPdf({
+  // ----------------------------------------------------------------- PDF building
+  /// Construye el PDF y devuelve los bytes — NO abre diálogo de impresión
+  Future<Uint8List> _buildPdfBytes({
     bool soloEmpresas = false,
     bool soloClientes = false,
     bool soloProductos = false,
     SectorReportItem? soloSector,
   }) async {
     final periodo = '${_fmtDate(_from)} - ${_fmtDate(_to)}';
-
-    final bool noData = _empresas.isEmpty &&
-        _clientes.isEmpty &&
-        _productos.isEmpty &&
-        _sectores.isEmpty;
-
-    final pdf = pw.Document();
-
     final titleStyle = pw.TextStyle(
         fontSize: 20,
         fontWeight: pw.FontWeight.bold,
@@ -165,272 +154,240 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
         color: PdfColors.brown700);
-    final bodyStyle = pw.TextStyle(fontSize: 10, color: PdfColors.grey800);
-    final headerStyle =
-        pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold);
+    final bodyStyle =
+        pw.TextStyle(fontSize: 10, color: PdfColors.grey800);
 
-    if (noData ||
-        (soloEmpresas && _empresas.isEmpty) ||
-        (soloClientes && _clientes.isEmpty) ||
-        (soloProductos && _productos.isEmpty) ||
-        (soloSector != null && soloSector.totalProductos == 0)) {
-      pdf.addPage(pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
-        build: (_) => pw.Center(
-          child: pw.Column(
-            mainAxisAlignment: pw.MainAxisAlignment.center,
-            children: [
-              pw.Text('AgroMarket Admin', style: headerStyle),
-              pw.SizedBox(height: 10),
-              pw.Text(
-                soloSector != null
-                    ? 'Reporte del Sector: ${soloSector.nombre}'
-                    : soloEmpresas
-                        ? 'Reporte de Empresas'
-                        : soloClientes
-                            ? 'Reporte de Clientes'
-                            : soloProductos
-                                ? 'Reporte de Productos'
-                                : 'Reporte General',
-                style: sectionStyle,
-              ),
-              pw.SizedBox(height: 6),
-              pw.Text('Período: $periodo', style: bodyStyle),
-              pw.SizedBox(height: 40),
-              pw.Container(
-                padding: const pw.EdgeInsets.all(20),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.orange),
-                  borderRadius: pw.BorderRadius.circular(8),
-                ),
-                child: pw.Text(
-                  'No hay datos suficientes para el reporte\nen el período seleccionado.',
-                  textAlign: pw.TextAlign.center,
-                  style: pw.TextStyle(
-                      fontSize: 14, color: PdfColors.orange900),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ));
-    } else {
-      final List<pw.Widget> content = [];
+    final pdf = pw.Document();
+    final List<pw.Widget> content = [];
 
-      // Header
-      content.addAll([
-        pw.Text('AgroMarket Admin — Reporte General', style: titleStyle),
-        pw.SizedBox(height: 4),
-        pw.Text('Período: $periodo', style: bodyStyle),
-        pw.Divider(color: PdfColors.brown300, thickness: 1),
-        pw.SizedBox(height: 12),
-      ]);
+    // Header
+    content.addAll([
+      pw.Text('AgroMarket Admin — Reporte General', style: titleStyle),
+      pw.SizedBox(height: 4),
+      pw.Text('Período: $periodo', style: bodyStyle),
+      pw.Divider(color: PdfColors.brown300, thickness: 1),
+      pw.SizedBox(height: 12),
+    ]);
 
-      // Top Empresas
-      if (!soloClientes && !soloProductos && soloSector == null &&
-          _empresas.isNotEmpty) {
-        content.add(pw.Text('Top Empresas', style: sectionStyle));
-        content.add(pw.SizedBox(height: 6));
-        final total = _empresas.fold(0.0, (s, e) => s + e.totalVentas);
-        for (int i = 0; i < _empresas.length; i++) {
-          final e = _empresas[i];
-          final pct = total > 0 ? (e.totalVentas / total * 100) : 0.0;
-          content.add(pw.Container(
-            margin: const pw.EdgeInsets.only(bottom: 6),
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.brown50,
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Row(
-              children: [
-                pw.Text('${i + 1}.',
-                    style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                pw.SizedBox(width: 8),
-                pw.Expanded(
-                    child: pw.Text(e.nombre,
-                        style: pw.TextStyle(
-                            fontWeight: pw.FontWeight.bold, fontSize: 11))),
-                pw.Text(
-                    '${_fmtMoney(e.totalVentas)}  •  ${e.totalProductos} productos  •  ↑ ${pct.toStringAsFixed(1)}%',
-                    style: bodyStyle),
-              ],
-            ),
-          ));
-        }
-        content.add(pw.SizedBox(height: 12));
+    // Top Empresas
+    if (!soloClientes && !soloProductos && soloSector == null &&
+        _empresas.isNotEmpty) {
+      final total = _empresas.fold(0.0, (s, e) => s + e.totalVentas);
+      content.add(pw.Text('Top Empresas', style: sectionStyle));
+      content.add(pw.SizedBox(height: 6));
+      for (int i = 0; i < _empresas.length; i++) {
+        final e = _empresas[i];
+        final pct = total > 0 ? (e.totalVentas / total * 100) : 0.0;
+        content.add(_pdfRow(
+            '${i + 1}. ${e.nombre}',
+            '${_fmtMoney(e.totalVentas)}  •  ${e.totalProductos} prod  •  ↑ ${pct.toStringAsFixed(1)}%',
+            bodyStyle));
       }
-
-      // Top Clientes
-      if (!soloEmpresas && !soloProductos && soloSector == null &&
-          _clientes.isNotEmpty) {
-        content.add(pw.Text('Top Clientes', style: sectionStyle));
-        content.add(pw.SizedBox(height: 6));
-        for (int i = 0; i < _clientes.length; i++) {
-          final c = _clientes[i];
-          content.add(pw.Container(
-            margin: const pw.EdgeInsets.only(bottom: 6),
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.brown50,
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Row(
-              children: [
-                pw.Text('${i + 1}.',
-                    style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                pw.SizedBox(width: 8),
-                pw.Expanded(
-                    child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                      pw.Text(c.nombre,
-                          style: pw.TextStyle(
-                              fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                      pw.Text(c.email, style: bodyStyle),
-                    ])),
-                pw.Text('Balance: ${_fmtMoney(c.balance)}',
-                    style: bodyStyle),
-              ],
-            ),
-          ));
-        }
-        content.add(pw.SizedBox(height: 12));
-      }
-
-      // Productos Más Vendidos
-      if (!soloEmpresas && !soloClientes && soloSector == null &&
-          _productos.isNotEmpty) {
-        content.add(pw.Text('Productos Más Vendidos', style: sectionStyle));
-        content.add(pw.SizedBox(height: 6));
-        for (final p in _productos) {
-          content.add(pw.Container(
-            margin: const pw.EdgeInsets.only(bottom: 6),
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.brown50,
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Row(
-              children: [
-                pw.Expanded(
-                    child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                      pw.Text(p.nombre,
-                          style: pw.TextStyle(
-                              fontWeight: pw.FontWeight.bold, fontSize: 11)),
-                      pw.Text(p.empresaNombre, style: bodyStyle),
-                      pw.Text('${p.stock} ${p.unidad} vendidos',
-                          style: bodyStyle),
-                    ])),
-                pw.Text(_fmtMoney(p.precio),
-                    style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold, fontSize: 11)),
-              ],
-            ),
-          ));
-        }
-        content.add(pw.SizedBox(height: 12));
-      }
-
-      // Sector individual
-      if (soloSector != null) {
-        final pct = _sectores.isNotEmpty
-            ? (soloSector.totalVentas /
-                    _sectores.fold(0.0, (s, x) => s + x.totalVentas) *
-                    100)
-                .toStringAsFixed(1)
-            : '0';
-        content.addAll([
-          pw.Text('Sector: ${soloSector.nombre}', style: sectionStyle),
-          pw.SizedBox(height: 8),
-          pw.Row(children: [
-            pw.Expanded(
-                child: _pdfStatCell(
-                    'Total Ventas', _fmtMoney(soloSector.totalVentas))),
-            pw.Expanded(
-                child:
-                    _pdfStatCell('Productos', '${soloSector.totalProductos}')),
-          ]),
-          pw.SizedBox(height: 4),
-          pw.Row(children: [
-            pw.Expanded(
-                child:
-                    _pdfStatCell('Empresas', '${soloSector.totalEmpresas}')),
-            pw.Expanded(child: _pdfStatCell('Participación', '↑ $pct%')),
-          ]),
-        ]);
-      }
-
-      // Rendimiento por Sector (solo en reporte general)
-      if (!soloEmpresas && !soloClientes && !soloProductos &&
-          soloSector == null && _sectores.isNotEmpty) {
-        content.add(pw.Text('Rendimiento por Sector', style: sectionStyle));
-        content.add(pw.SizedBox(height: 6));
-        final totalSect =
-            _sectores.fold(0.0, (s, x) => s + x.totalVentas);
-        for (final s in _sectores) {
-          final pct = totalSect > 0
-              ? (s.totalVentas / totalSect * 100).toStringAsFixed(1)
-              : '0';
-          content.add(pw.Container(
-            margin: const pw.EdgeInsets.only(bottom: 6),
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.brown50,
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Row(
-              children: [
-                pw.Expanded(
-                    child: pw.Text(s.nombre,
-                        style: pw.TextStyle(
-                            fontWeight: pw.FontWeight.bold, fontSize: 11))),
-                pw.Text(
-                    '${_fmtMoney(s.totalVentas)}  •  ${s.totalProductos} prod  •  ${s.totalEmpresas} emp  •  ↑ $pct%',
-                    style: bodyStyle),
-              ],
-            ),
-          ));
-        }
-      }
-
-      pdf.addPage(pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(36),
-        build: (_) => content,
-      ));
+      content.add(pw.SizedBox(height: 12));
     }
 
-    await Printing.layoutPdf(
-      onLayout: (_) async => pdf.save(),
-      name: 'reporte_agromarket_${DateTime.now().millisecondsSinceEpoch}.pdf',
+    // Top Clientes
+    if (!soloEmpresas && !soloProductos && soloSector == null &&
+        _clientes.isNotEmpty) {
+      content.add(pw.Text('Top Clientes', style: sectionStyle));
+      content.add(pw.SizedBox(height: 6));
+      for (int i = 0; i < _clientes.length; i++) {
+        final c = _clientes[i];
+        content.add(_pdfRow(
+            '${i + 1}. ${c.nombre}',
+            '${_fmtMoney(c.balance)}  •  ${c.email}',
+            bodyStyle));
+      }
+      content.add(pw.SizedBox(height: 12));
+    }
+
+    // Productos Más Vendidos
+    if (!soloEmpresas && !soloClientes && soloSector == null &&
+        _productos.isNotEmpty) {
+      content.add(pw.Text('Productos Más Vendidos', style: sectionStyle));
+      content.add(pw.SizedBox(height: 6));
+      for (final p in _productos) {
+        content.add(_pdfRow(
+            p.nombre,
+            '${_fmtMoney(p.precio)}  •  ${p.stock} ${p.unidad}  •  ${p.empresaNombre}',
+            bodyStyle));
+      }
+      content.add(pw.SizedBox(height: 12));
+    }
+
+    // Sector individual
+    if (soloSector != null) {
+      final totalSect =
+          _sectores.fold(0.0, (s, x) => s + x.totalVentas);
+      final pct = totalSect > 0
+          ? (soloSector.totalVentas / totalSect * 100).toStringAsFixed(1)
+          : '0';
+      content.addAll([
+        pw.Text('Sector: ${soloSector.nombre}', style: sectionStyle),
+        pw.SizedBox(height: 8),
+        _pdfRow('Total Ventas', _fmtMoney(soloSector.totalVentas), bodyStyle),
+        _pdfRow('Productos', '${soloSector.totalProductos}', bodyStyle),
+        _pdfRow('Empresas', '${soloSector.totalEmpresas}', bodyStyle),
+        _pdfRow('Participación de mercado', '↑ $pct%', bodyStyle),
+      ]);
+    }
+
+    // Rendimiento por Sector (solo en general)
+    if (!soloEmpresas && !soloClientes && !soloProductos &&
+        soloSector == null && _sectores.isNotEmpty) {
+      content.add(pw.Text('Rendimiento por Sector', style: sectionStyle));
+      content.add(pw.SizedBox(height: 6));
+      final totalSect =
+          _sectores.fold(0.0, (s, x) => s + x.totalVentas);
+      for (final s in _sectores) {
+        final pct = totalSect > 0
+            ? (s.totalVentas / totalSect * 100).toStringAsFixed(1)
+            : '0';
+        content.add(_pdfRow(
+            s.nombre,
+            '${_fmtMoney(s.totalVentas)}  •  ${s.totalProductos} prod  •  ${s.totalEmpresas} emp  •  ↑ $pct%',
+            bodyStyle));
+      }
+    }
+
+    pdf.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(36),
+      build: (_) => content,
+    ));
+
+    return pdf.save();
+  }
+
+  pw.Widget _pdfRow(String label, String value, pw.TextStyle style) =>
+      pw.Container(
+        margin: const pw.EdgeInsets.only(bottom: 6),
+        padding: const pw.EdgeInsets.all(8),
+        decoration: pw.BoxDecoration(
+          color: PdfColors.brown50,
+          borderRadius: pw.BorderRadius.circular(4),
+        ),
+        child: pw.Row(children: [
+          pw.Expanded(
+              child: pw.Text(label,
+                  style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold, fontSize: 11))),
+          pw.Text(value, style: style),
+        ]),
+      );
+
+  // ----------------------------------------------------------------- preview / download
+
+  bool _hasData({
+    bool soloEmpresas = false,
+    bool soloClientes = false,
+    bool soloProductos = false,
+    SectorReportItem? soloSector,
+  }) {
+    if (soloEmpresas) return _empresas.isNotEmpty;
+    if (soloClientes) return _clientes.isNotEmpty;
+    if (soloProductos) return _productos.isNotEmpty;
+    if (soloSector != null) {
+      return soloSector.totalProductos > 0 || soloSector.totalEmpresas > 0;
+    }
+    return _empresas.isNotEmpty ||
+        _clientes.isNotEmpty ||
+        _productos.isNotEmpty;
+  }
+
+  void _showNoDataSnack() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+            'No hay datos registrados para este período'),
+        backgroundColor: Colors.orange[800],
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
     );
   }
 
-  pw.Widget _pdfStatCell(String label, String value) {
-    return pw.Container(
-      margin: const pw.EdgeInsets.all(4),
-      padding: const pw.EdgeInsets.all(8),
-      decoration: pw.BoxDecoration(
-        color: PdfColors.brown50,
-        borderRadius: pw.BorderRadius.circular(4),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Text(label,
-              style: pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-          pw.Text(value,
-              style:
-                  pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-        ],
+  /// "Ver reporte" → abre preview (si hay datos) o SnackBar (si no)
+  void _openPreview({
+    required String title,
+    bool soloEmpresas = false,
+    bool soloClientes = false,
+    bool soloProductos = false,
+    SectorReportItem? soloSector,
+  }) {
+    if (!_hasData(
+        soloEmpresas: soloEmpresas,
+        soloClientes: soloClientes,
+        soloProductos: soloProductos,
+        soloSector: soloSector)) {
+      _showNoDataSnack();
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminPdfPreviewView(
+          title: title,
+          buildPdf: () => _buildPdfBytes(
+            soloEmpresas: soloEmpresas,
+            soloClientes: soloClientes,
+            soloProductos: soloProductos,
+            soloSector: soloSector,
+          ),
+        ),
       ),
     );
+  }
+
+  /// Botón naranja PDF → guarda directo al archivo (si hay datos) o SnackBar
+  Future<void> _saveToFile({
+    bool soloEmpresas = false,
+    bool soloClientes = false,
+    bool soloProductos = false,
+    SectorReportItem? soloSector,
+  }) async {
+    if (!_hasData(
+        soloEmpresas: soloEmpresas,
+        soloClientes: soloClientes,
+        soloProductos: soloProductos,
+        soloSector: soloSector)) {
+      _showNoDataSnack();
+      return;
+    }
+
+    final bytes = await _buildPdfBytes(
+      soloEmpresas: soloEmpresas,
+      soloClientes: soloClientes,
+      soloProductos: soloProductos,
+      soloSector: soloSector,
+    );
+
+    final filename =
+        'reporte_agromarket_${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+    if (!mounted) return;
+
+    if (Platform.isAndroid || Platform.isIOS) {
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+    } else {
+      final dir = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/$filename');
+      await file.writeAsBytes(bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('PDF guardado en: ${file.path}'),
+            backgroundColor: Colors.green[700],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   // ----------------------------------------------------------------- date pickers
@@ -509,8 +466,8 @@ class _AdminReportsViewState extends State<AdminReportsView> {
           ? const Center(
               child: CircularProgressIndicator(color: _primary))
           : SingleChildScrollView(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
               child: Column(children: [
                 _filtrosCard(),
                 const SizedBox(height: 16),
@@ -564,8 +521,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
-              fontWeight:
-                  active ? FontWeight.w600 : FontWeight.normal,
+              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
               color: active ? Colors.white : _textPrimary,
             ),
           ),
@@ -575,7 +531,9 @@ class _AdminReportsViewState extends State<AdminReportsView> {
   }
 
   Widget _filtrosCard() => _card(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           const Text('Filtros de Fecha',
               style: TextStyle(
                   fontSize: 15,
@@ -595,7 +553,8 @@ class _AdminReportsViewState extends State<AdminReportsView> {
               style: TextStyle(fontSize: 13, color: _textSecondary)),
           const SizedBox(height: 8),
           Row(children: [
-            Expanded(child: _dateField(_customFrom ?? _from, true)),
+            Expanded(
+                child: _dateField(_customFrom ?? _from, true)),
             const SizedBox(width: 10),
             Expanded(child: _dateField(_customTo ?? _to, false)),
           ]),
@@ -617,11 +576,12 @@ class _AdminReportsViewState extends State<AdminReportsView> {
             ),
           ),
           const SizedBox(height: 10),
+          // "Descargar reporte general PDF" → preview general
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton.icon(
-              onPressed: _downloadPdf,
+              onPressed: () => _openPreview(title: 'Reporte General'),
               icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
               label: const Text('Descargar reporte general PDF',
                   style: TextStyle(
@@ -650,11 +610,9 @@ class _AdminReportsViewState extends State<AdminReportsView> {
           ),
           child: Row(children: [
             Expanded(
-              child: Text(
-                _fmtDate(dt),
-                style: const TextStyle(
-                    fontSize: 13, color: _textPrimary),
-              ),
+              child: Text(_fmtDate(dt),
+                  style: const TextStyle(
+                      fontSize: 13, color: _textPrimary)),
             ),
             const Icon(Icons.calendar_today_outlined,
                 size: 16, color: _textSecondary),
@@ -662,6 +620,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         ),
       );
 
+  /// Botón PDF naranja → guarda directo al archivo
   Widget _pdfIconBtn(VoidCallback onTap) => GestureDetector(
         onTap: onTap,
         child: Container(
@@ -676,10 +635,18 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         ),
       );
 
-  Widget _sectionRow(String label, VoidCallback onPdf) => Row(children: [
+  /// Fila "Ver reporte X" (texto) + botón PDF naranja
+  /// - Texto → preview
+  /// - Naranja → guardar directo
+  Widget _sectionRow({
+    required String label,
+    required VoidCallback onPreview,
+    required VoidCallback onSave,
+  }) =>
+      Row(children: [
         Expanded(
           child: OutlinedButton(
-            onPressed: onPdf,
+            onPressed: onPreview,
             style: OutlinedButton.styleFrom(
               foregroundColor: _textPrimary,
               side: const BorderSide(color: Color(0xFFE0D9CC)),
@@ -692,7 +659,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
           ),
         ),
         const SizedBox(width: 10),
-        _pdfIconBtn(onPdf),
+        _pdfIconBtn(onSave),
       ]);
 
   Widget _rankBadge(int n) => Container(
@@ -717,10 +684,12 @@ class _AdminReportsViewState extends State<AdminReportsView> {
 
   // ---- Top Empresas ----
   Widget _topEmpresasCard() {
-    final vals = _empresas.map((e) => e.totalVentas).toList();
-    final total = vals.fold(0.0, (s, v) => s + v);
+    final total =
+        _empresas.fold(0.0, (s, e) => s + e.totalVentas);
     return _card(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
         const Text('Top Empresas',
             style: TextStyle(
                 fontSize: 16,
@@ -737,8 +706,12 @@ class _AdminReportsViewState extends State<AdminReportsView> {
             return _empresaItem(e, i + 1, pct);
           }),
         const SizedBox(height: 12),
-        _sectionRow('Ver reporte completo',
-            () => _downloadPdf(soloEmpresas: true)),
+        _sectionRow(
+          label: 'Ver reporte completo',
+          onPreview: () => _openPreview(
+              title: 'Reporte de Empresas', soloEmpresas: true),
+          onSave: () => _saveToFile(soloEmpresas: true),
+        ),
       ]),
     );
   }
@@ -779,10 +752,12 @@ class _AdminReportsViewState extends State<AdminReportsView> {
 
   // ---- Top Clientes ----
   Widget _topClientesCard() {
-    final vals = _clientes.map((c) => c.balance).toList();
-    final total = vals.fold(0.0, (s, v) => s + v);
+    final total =
+        _clientes.fold(0.0, (s, c) => s + c.balance);
     return _card(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
         const Text('Top Clientes',
             style: TextStyle(
                 fontSize: 16,
@@ -799,8 +774,12 @@ class _AdminReportsViewState extends State<AdminReportsView> {
             return _clienteItem(c, i + 1, pct);
           }),
         const SizedBox(height: 12),
-        _sectionRow('Ver reporte completo',
-            () => _downloadPdf(soloClientes: true)),
+        _sectionRow(
+          label: 'Ver reporte completo',
+          onPreview: () => _openPreview(
+              title: 'Reporte de Clientes', soloClientes: true),
+          onSave: () => _saveToFile(soloClientes: true),
+        ),
       ]),
     );
   }
@@ -821,8 +800,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
                       fontWeight: FontWeight.w600,
                       color: _textPrimary)),
               const SizedBox(height: 2),
-              Text(
-                  '${c.balance.toStringAsFixed(0)} monedas',
+              Text('${c.balance.toStringAsFixed(0)} monedas',
                   style: const TextStyle(
                       fontSize: 12, color: _textSecondary)),
             ]),
@@ -837,7 +815,9 @@ class _AdminReportsViewState extends State<AdminReportsView> {
 
   // ---- Productos Más Vendidos ----
   Widget _productosMasVendidosCard() => _card(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           const Text('Productos Más Vendidos',
               style: TextStyle(
                   fontSize: 16,
@@ -845,18 +825,24 @@ class _AdminReportsViewState extends State<AdminReportsView> {
                   color: _textPrimary)),
           const SizedBox(height: 12),
           if (_productos.isEmpty)
-            _emptyState('No hay productos con datos en este período')
+            _emptyState(
+                'No hay productos con datos en este período')
           else
             ..._productos.map((p) => _productoItem(p)),
           const SizedBox(height: 12),
-          _sectionRow('Ver reporte',
-              () => _downloadPdf(soloProductos: true)),
+          _sectionRow(
+            label: 'Ver reporte',
+            onPreview: () => _openPreview(
+                title: 'Reporte de Productos', soloProductos: true),
+            onSave: () => _saveToFile(soloProductos: true),
+          ),
         ]),
       );
 
   Widget _productoItem(ProductoReportItem p) => Padding(
         padding: const EdgeInsets.only(bottom: 14),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child:
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Expanded(
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -940,7 +926,9 @@ class _AdminReportsViewState extends State<AdminReportsView> {
             ),
           ),
           const SizedBox(width: 12),
-          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             Text(s.nombre,
                 style: const TextStyle(
                     fontSize: 15,
@@ -962,14 +950,20 @@ class _AdminReportsViewState extends State<AdminReportsView> {
           _statGrowthCell('Crecimiento', '↑ +$pct%'),
         ]),
         const SizedBox(height: 16),
-        _sectionRow('Ver reporte del sector',
-            () => _downloadPdf(soloSector: s)),
+        _sectionRow(
+          label: 'Ver reporte del sector',
+          onPreview: () => _openPreview(
+              title: 'Sector: ${s.nombre}', soloSector: s),
+          onSave: () => _saveToFile(soloSector: s),
+        ),
       ]),
     );
   }
 
   Widget _statCell(String label, String value) => Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           Text(label,
               style: const TextStyle(
                   fontSize: 11, color: _textSecondary)),
@@ -983,7 +977,9 @@ class _AdminReportsViewState extends State<AdminReportsView> {
       );
 
   Widget _statGrowthCell(String label, String value) => Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           Text(label,
               style: const TextStyle(
                   fontSize: 11, color: _textSecondary)),
