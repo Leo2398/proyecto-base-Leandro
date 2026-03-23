@@ -14,7 +14,7 @@ class ProductService implements IProductService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute('''
-        SELECT p.ID, p.name, p.picture, p.price, p.stock,
+        SELECT p.ID, p.UserID AS producerId, p.name, p.picture, p.price, p.stock,
                COALESCE(p.unit, 'unidades') AS unit,
                u.name AS producerName
         FROM Product p
@@ -27,6 +27,7 @@ class ProductService implements IProductService {
         final m = row.assoc();
         return TopProductItem(
           id: int.tryParse(m['ID']?.toString() ?? '0') ?? 0,
+          producerId: int.tryParse(m['producerId']?.toString() ?? '0') ?? 0,
           nombre: m['name']?.toString() ?? '',
           producerName: m['producerName']?.toString() ?? '',
           precio: double.tryParse(m['price']?.toString() ?? '0') ?? 0.0,

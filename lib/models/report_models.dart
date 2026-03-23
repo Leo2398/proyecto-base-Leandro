@@ -46,6 +46,7 @@ class ProductoReportItem {
 
 class TopProductItem {
   final int id;
+  final int producerId;
   final String nombre;
   final String producerName;
   final double precio;
@@ -55,6 +56,7 @@ class TopProductItem {
 
   const TopProductItem({
     required this.id,
+    required this.producerId,
     required this.nombre,
     required this.producerName,
     required this.precio,
