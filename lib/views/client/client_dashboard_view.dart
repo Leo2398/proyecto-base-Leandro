@@ -4,7 +4,7 @@ import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
 import 'client_best_sellers_view.dart';
 import 'client_producer_products_view.dart';
-
+import 'client_settings_view.dart';
 /// Dashboard principal del cliente
 /// Principio S de SOLID: solo maneja la UI del dashboard del cliente
 class ClientDashboardView extends StatefulWidget {
@@ -107,14 +107,19 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
 
   /// Botón de configuración
   IconButton(
-    onPressed: () {
-      // TODO: navegar a configuración
-    },
-    icon: const Icon(
-      Icons.settings_outlined,
-      color: Color(0xFF2D2D2D),
-    ),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ClientSettingsView(),
+      ),
+    );
+  },
+  icon: const Icon(
+    Icons.settings_outlined,
+    color: Color(0xFF2D2D2D),
   ),
+),
 
   /// Botón de cerrar sesión
   IconButton(
