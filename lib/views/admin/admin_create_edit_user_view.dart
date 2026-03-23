@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
@@ -163,15 +164,19 @@ class _AdminCreateEditUserViewState extends State<AdminCreateEditUserView> {
           Consumer<UserController>(
             builder: (_, ctrl, __) {
               final img = ctrl.currentUser?.image;
+              ImageProvider? imgProvider;
+              if (img != null && img.isNotEmpty) {
+                imgProvider = img.startsWith('http')
+                    ? NetworkImage(img)
+                    : FileImage(File(img)) as ImageProvider;
+              }
               return Padding(
                 padding: const EdgeInsets.only(right: 10),
                 child: CircleAvatar(
                   radius: 17,
                   backgroundColor: const Color(0xFFD4A017),
-                  backgroundImage: (img != null && img.isNotEmpty)
-                      ? NetworkImage(img)
-                      : null,
-                  child: (img == null || img.isEmpty)
+                  backgroundImage: imgProvider,
+                  child: imgProvider == null
                       ? const Icon(Icons.person,
                           color: Colors.white, size: 18)
                       : null,

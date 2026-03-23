@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../controllers/cart_controller.dart';
 import '../../controllers/product_controller.dart';
 import '../../models/product_model.dart';
 import '../../models/user_model.dart';
@@ -139,11 +140,19 @@ class _ClientProducerProductsViewState
     return const Color(0xFF5A8A5A);
   }
 
-  void _showComingSoon(String productName) {
+  void _addToCart(ProductModel product) {
+    context.read<CartController>().addFromProduct(
+          product,
+          producerName: widget.producer.name,
+        );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Próximamente podrás comprar "$productName"'),
+        content: Text('"${product.name}" agregado al carrito'),
         backgroundColor: const Color(0xFF5A8A5A),
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -692,38 +701,36 @@ class _ClientProducerProductsViewState
             child: Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _showComingSoon(product.name),
-                    icon: const Icon(Icons.visibility_outlined, size: 18),
-                    label: const Text('Ver detalle'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF5A8A5A),
-                      side: const BorderSide(color: Color(0xFFD7E4D7)),
-                      backgroundColor: const Color(0xFFF8FCF8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed:
-                    product.stock == 0 ? null : () => _showComingSoon(product.name),
-                    icon: const Icon(Icons.shopping_cart_outlined, size: 18),
-                    label: const Text('Comprar'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5A8A5A),
-                      disabledBackgroundColor: const Color(0xFFC7C7C7),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                    ),
+                  child: Consumer<CartController>(
+                    builder: (_, cart, __) {
+                      final inCart = cart.items.any(
+                          (i) => i.productId == (product.id ?? -1));
+                      return OutlinedButton.icon(
+                        onPressed: product.stock == 0
+                            ? null
+                            : () => _addToCart(product),
+                        icon: Icon(
+                          inCart
+                              ? Icons.check_circle_outline
+                              : Icons.shopping_cart_outlined,
+                          size: 18,
+                        ),
+                        label: Text(inCart
+                            ? 'En carrito'
+                            : 'Agregar al carrito'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF5A8A5A),
+                          side: const BorderSide(
+                              color: Color(0xFFD7E4D7)),
+                          backgroundColor: const Color(0xFFF8FCF8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 13),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],

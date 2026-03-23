@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../controllers/cart_controller.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
 import 'client_best_sellers_view.dart';
@@ -105,6 +106,40 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
   ),
   const SizedBox(width: 4),
 
+  /// Carrito de compras con badge
+  Consumer<CartController>(
+    builder: (_, cart, __) => Stack(
+      children: [
+        IconButton(
+          onPressed: () {},
+          icon: const Icon(
+            Icons.shopping_cart_outlined,
+            color: Color(0xFF2D2D2D),
+          ),
+        ),
+        if (cart.itemCount > 0)
+          Positioned(
+            right: 6,
+            top: 6,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: const BoxDecoration(
+                color: Color(0xFF5A8A5A),
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '${cart.itemCount}',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+      ],
+    ),
+  ),
+
   /// Botón de configuración
   IconButton(
   onPressed: () {
@@ -163,34 +198,52 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
 
                   const SizedBox(height: 12),
 
-                  /// Lista horizontal de productos
+                  /// Lista horizontal de productos (toca para ver más vendidos)
                   SizedBox(
                     height: 180,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
-                      children: const [
-                        _ProductCard(
-                          name: 'Tomate Cherry\nOrgánico',
-                          producer: 'FreshFarm Co.',
-                          rating: 4.8,
-                          price: '2/kg',
-                          color: Color(0xFFE8F0E8),
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.push(context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ClientBestSellersView())),
+                          child: const _ProductCard(
+                            name: 'Tomate Cherry\nOrgánico',
+                            producer: 'FreshFarm Co.',
+                            rating: 4.8,
+                            price: '2/kg',
+                            color: Color(0xFFE8F0E8),
+                          ),
                         ),
-                        SizedBox(width: 12),
-                        _ProductCard(
-                          name: 'Lechuga\nHidropónica',
-                          producer: 'Verde Vital',
-                          rating: 4.6,
-                          price: '4/100g',
-                          color: Color(0xFFE8F5E8),
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ClientBestSellersView())),
+                          child: const _ProductCard(
+                            name: 'Lechuga\nHidropónica',
+                            producer: 'Verde Vital',
+                            rating: 4.6,
+                            price: '4/100g',
+                            color: Color(0xFFE8F5E8),
+                          ),
                         ),
-                        SizedBox(width: 12),
-                        _ProductCard(
-                          name: 'Mango\nAtaulfo',
-                          producer: 'AgroSur',
-                          rating: 4.9,
-                          price: '3/kg',
-                          color: Color(0xFFFFF3E0),
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () => Navigator.push(context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ClientBestSellersView())),
+                          child: const _ProductCard(
+                            name: 'Mango\nAtaulfo',
+                            producer: 'AgroSur',
+                            rating: 4.9,
+                            price: '3/kg',
+                            color: Color(0xFFFFF3E0),
+                          ),
                         ),
                       ],
                     ),

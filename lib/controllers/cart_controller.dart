@@ -1,0 +1,68 @@
+import 'package:flutter/material.dart';
+import '../models/cart_item_model.dart';
+import '../models/product_model.dart';
+import '../models/report_models.dart';
+
+/// Principio S de SOLID: solo maneja el estado del carrito
+class CartController extends ChangeNotifier {
+  final List<CartItem> _items = [];
+
+  List<CartItem> get items => List.unmodifiable(_items);
+
+  int get itemCount => _items.fold(0, (sum, i) => sum + i.quantity);
+
+  double get total => _items.fold(0.0, (sum, i) => sum + i.subtotal);
+
+  void addFromProduct(ProductModel product, {String producerName = ''}) {
+    final idx = _items.indexWhere((i) => i.productId == (product.id ?? -1));
+    if (idx >= 0) {
+      _items[idx].quantity++;
+    } else {
+      _items.add(CartItem(
+        productId: product.id ?? 0,
+        nombre: product.name,
+        producerName: producerName,
+        precio: product.price,
+        unidad: product.unit ?? 'unidad',
+      ));
+    }
+    notifyListeners();
+  }
+
+  void addFromTopItem(TopProductItem item) {
+    final idx = _items.indexWhere((i) => i.productId == item.id);
+    if (idx >= 0) {
+      _items[idx].quantity++;
+    } else {
+      _items.add(CartItem(
+        productId: item.id,
+        nombre: item.nombre,
+        producerName: item.producerName,
+        precio: item.precio,
+        unidad: item.unidad,
+      ));
+    }
+    notifyListeners();
+  }
+
+  void removeItem(int productId) {
+    _items.removeWhere((i) => i.productId == productId);
+    notifyListeners();
+  }
+
+  void decrementItem(int productId) {
+    final idx = _items.indexWhere((i) => i.productId == productId);
+    if (idx < 0) return;
+    if (_items[idx].quantity <= 1) {
+      _items.removeAt(idx);
+    } else {
+      _items[idx].quantity--;
+    }
+    notifyListeners();
+  }
+
+  void clearCart() {
+    _items.clear();
+    notifyListeners();
+  }
+}
