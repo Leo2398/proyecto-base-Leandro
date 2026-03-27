@@ -140,18 +140,130 @@ class _ClientProducerProductsViewState
     return const Color(0xFF5A8A5A);
   }
 
+  // Reemplaza SOLO el método _addToCart en client_producer_products_view.dart
+
   void _addToCart(ProductModel product) {
-    context.read<CartController>().addFromProduct(
-          product,
-          producerName: widget.producer.name,
-        );
+    final cart = context.read<CartController>();
+
+    // Verifica si el producto es de otra empresa
+    if (!cart.canAddFromProducer(widget.producer.name)) {
+      // Muestra el aviso de empresa diferente
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (_) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE0D8CE),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: 64, height: 64,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0EC),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.storefront_outlined,
+                  color: Color(0xFFD96C2F),
+                  size: 32,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Solo una empresa por pedido',
+                style: TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D2D2D),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Tu carrito ya tiene productos de "${cart.currentProducerName}". '
+                'Vacía el carrito para agregar productos de otra empresa.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 14, color: Color(0xFF888888), height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF5A8A5A),
+                        side: const BorderSide(color: Color(0xFF5A8A5A)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Cancelar',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        cart.clearCart();
+                        Navigator.pop(context);
+                        // Reintenta agregar después de limpiar
+                        cart.addFromProduct(
+                          product,
+                          producerName: widget.producer.name,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('"${product.name}" agregado al carrito'),
+                            backgroundColor: const Color(0xFF5A8A5A),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFD96C2F),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Vaciar y agregar',
+                          style: TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Agrega normalmente
+    cart.addFromProduct(product, producerName: widget.producer.name);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('"${product.name}" agregado al carrito'),
         backgroundColor: const Color(0xFF5A8A5A),
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         duration: const Duration(seconds: 2),
       ),
     );

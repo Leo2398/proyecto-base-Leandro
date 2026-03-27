@@ -83,7 +83,19 @@ class UserController extends ChangeNotifier {
       notifyListeners();
     }
   }
-
+    Future<void> reloadCurrentUser() async {
+    if (_currentUser?.id == null) return;
+    try {
+      final updated = await _userService.getUserById(_currentUser!.id!);
+      if (updated != null) {
+        _currentUser = updated;
+        await SessionHelper.saveSession(_currentUser!);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error en reloadCurrentUser: $e');
+    }
+  }
   /// Inicia sesión con email y password
   Future<bool> login(String email, String password) async {
     try {
