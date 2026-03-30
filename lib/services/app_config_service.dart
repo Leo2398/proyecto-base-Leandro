@@ -5,17 +5,26 @@ import '../core/db_connection.dart';
 class AppConfigService {
   final DBConnection _db = DBConnection.instance;
 
-  /// Crea la tabla si no existe
+  /// Crea la tabla (fuerza esquema correcto si ya existía con otro esquema)
   Future<void> initTable() async {
     try {
       final conn = await _db.getConnection();
-      await conn.execute('''
-        CREATE TABLE IF NOT EXISTS AppConfig (
-          configKey VARCHAR(100) PRIMARY KEY,
-          configValue TEXT,
-          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        )
-      ''');
+      // Verificar si la tabla existe con el esquema correcto
+      try {
+        await conn.execute(
+            'SELECT configKey FROM AppConfig LIMIT 1');
+        // Si llega aquí, el esquema es correcto
+      } catch (_) {
+        // La tabla no existe o tiene columnas distintas → recrear
+        await conn.execute('DROP TABLE IF EXISTS AppConfig');
+        await conn.execute('''
+          CREATE TABLE AppConfig (
+            configKey VARCHAR(100) PRIMARY KEY,
+            configValue TEXT,
+            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          )
+        ''');
+      }
     } catch (e) {
       print('Error en AppConfigService.initTable: $e');
     }
@@ -42,10 +51,10 @@ class AppConfigService {
       await conn.execute(
         '''
         INSERT INTO AppConfig (configKey, configValue)
-        VALUES (:key, :value)
-        ON DUPLICATE KEY UPDATE configValue = :value
+        VALUES (:key, :val)
+        ON DUPLICATE KEY UPDATE configValue = VALUES(configValue)
         ''',
-        {'key': key, 'value': value},
+        {'key': key, 'val': value},
       );
       return true;
     } catch (e) {

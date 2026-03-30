@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
+import '../../services/user_service.dart';
 import '../auth/login_view.dart';
 import 'admin_clients_view.dart';
 import 'admin_coin_recharge_view.dart';
@@ -21,6 +22,30 @@ class AdminDashboardView extends StatefulWidget {
 
 class _AdminDashboardViewState extends State<AdminDashboardView> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _userService = UserService();
+
+  int _clientCount = 0;
+  int _companyCount = 0;
+  bool _loadingStats = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    setState(() => _loadingStats = true);
+    final clients = await _userService.getUsersByRole(0);
+    final companies = await _userService.getUsersByRole(1);
+    if (mounted) {
+      setState(() {
+        _clientCount = clients.length;
+        _companyCount = companies.length;
+        _loadingStats = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -170,9 +195,9 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                           icon: Icons.group_outlined,
                           iconColor: const Color(0xFFB8860B),
                           iconBgColor: const Color(0xFFFFF3E0),
-                          value: '1,247',
+                          value: _loadingStats ? '...' : '$_clientCount',
                           label: 'Total Clientes',
-                          trend: '+12% este mes',
+                          trend: 'Clientes registrados',
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -181,9 +206,9 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
                           icon: Icons.store_outlined,
                           iconColor: const Color(0xFFB8860B),
                           iconBgColor: const Color(0xFFFFF3E0),
-                          value: '89',
+                          value: _loadingStats ? '...' : '$_companyCount',
                           label: 'Total Empresas',
-                          trend: '+8% este mes',
+                          trend: 'Empresas registradas',
                         ),
                       ),
                     ],
