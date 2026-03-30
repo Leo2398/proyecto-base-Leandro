@@ -4,6 +4,7 @@ import '../../controllers/cart_controller.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
 import 'client_best_sellers_view.dart';
+import 'client_coin_recharge_view.dart';
 import 'client_producer_products_view.dart';
 import 'client_settings_view.dart';
 /// Dashboard principal del cliente
@@ -360,6 +361,11 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
             label: 'Más vendidos',
           ),
           BottomNavigationBarItem(
+            icon: Icon(Icons.monetization_on_outlined),
+            activeIcon: Icon(Icons.monetization_on),
+            label: 'Recargar',
+          ),
+          BottomNavigationBarItem(
             icon: Icon(Icons.shopping_cart_outlined),
             activeIcon: Icon(Icons.shopping_cart),
             label: 'Pedidos',
@@ -376,6 +382,12 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
               context,
               MaterialPageRoute(
                   builder: (_) => const ClientBestSellersView()),
+            );
+          } else if (index == 3) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const ClientCoinRechargeView()),
             );
           }
         },

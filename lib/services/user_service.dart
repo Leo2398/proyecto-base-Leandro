@@ -76,6 +76,21 @@ class UserService implements IUserService {
     }
   }
 
+  /// Obtiene todos los usuarios de un rol específico (incluye inactivos)
+  Future<List<UserModel>> getUsersByRole(int role) async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        'SELECT * FROM User WHERE role = :role ORDER BY name ASC',
+        {'role': role},
+      );
+      return result.rows.map((r) => UserModel.fromMap(r.assoc())).toList();
+    } catch (e) {
+      print('Error en getUsersByRole: $e');
+      return [];
+    }
+  }
+
   /// Registra un nuevo usuario en la BD
   /// Guarda Location, PickupLocation y User en orden
   @override

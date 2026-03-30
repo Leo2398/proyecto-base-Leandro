@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
+import 'admin_clients_view.dart';
+import 'admin_coin_recharge_view.dart';
+import 'admin_companies_view.dart';
 import 'admin_settings_view.dart';
 import 'admin_users_list_view.dart';
 import 'admin_reports_view.dart';
@@ -299,7 +302,8 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
               label: 'Clientes',
               onTap: () {
                 Navigator.pop(context);
-                // TODO: navegar a clientes
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AdminClientsView()));
               },
             ),
             _DrawerItem(
@@ -307,15 +311,19 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
               label: 'Empresas',
               onTap: () {
                 Navigator.pop(context);
-                // TODO: navegar a empresas
+                Navigator.push(context,
+                    MaterialPageRoute(
+                        builder: (_) => const AdminCompaniesView()));
               },
             ),
             _DrawerItem(
-              icon: Icons.upload_outlined,
+              icon: Icons.monetization_on_outlined,
               label: 'Solicitudes de Carga',
               onTap: () {
                 Navigator.pop(context);
-                // TODO: navegar a solicitudes
+                Navigator.push(context,
+                    MaterialPageRoute(
+                        builder: (_) => const AdminCoinRechargeView()));
               },
             ),
             _DrawerItem(
