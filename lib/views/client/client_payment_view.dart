@@ -4,7 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../controllers/request_controller.dart';
 import '../../controllers/user_controller.dart';
-import '../../core/cloudinary_helper.dart';
+import '../../core/image_helper.dart';
 
 /// Pantalla donde el cliente ve el QR, sube el comprobante y confirma el pago
 class ClientPaymentView extends StatefulWidget {
@@ -42,7 +42,7 @@ class _ClientPaymentViewState extends State<ClientPaymentView> {
       _uploadedUrl = null;
     });
 
-    final url = await CloudinaryHelper.uploadImage(_receiptImage!);
+    final url = await ImageHelper.toBase64(_receiptImage!);
 
     if (!mounted) return;
     setState(() {
@@ -424,15 +424,15 @@ class _ClientPaymentViewState extends State<ClientPaymentView> {
               border: Border.all(color: const Color(0xFFE8E0D4)),
             ),
             child: hasQr
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.network(
-                      config.qrImage!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _qrPlaceholder(),
-                    ),
-                  )
-                : _qrPlaceholder(),
+    ? AppImage(
+        src: config.qrImage,
+        fit: BoxFit.cover,
+        borderRadius: 16,
+        width: 200,
+        height: 200,
+        placeholder: _qrPlaceholder(),
+      )
+    : _qrPlaceholder(),
           ),
 
           const SizedBox(height: 16),

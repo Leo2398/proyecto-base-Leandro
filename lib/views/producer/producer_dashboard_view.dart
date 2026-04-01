@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../controllers/product_controller.dart';
 import '../../controllers/user_controller.dart';
+import '../../core/image_helper.dart';
 import '../../models/product_model.dart';
 import 'producer_create_product_view.dart';
 import 'producer_products_view.dart';
 import '../auth/login_view.dart';
-import 'package:provider/provider.dart';
 
 class ProducerDashboardView extends StatefulWidget {
   const ProducerDashboardView({super.key});
@@ -28,44 +28,34 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   Future<void> _loadDashboardData() async {
     final userController = Provider.of<UserController>(context, listen: false);
     final productController =
-    Provider.of<ProductController>(context, listen: false);
-
+        Provider.of<ProductController>(context, listen: false);
     final currentUser = userController.currentUser;
-
     if (currentUser == null || currentUser.id == null) return;
-
     await productController.getProductsByProducer(currentUser.id!);
   }
 
-  List<ProductModel> _recentProducts(List<ProductModel> products) {
-    return products.take(3).toList();
-  }
+  List<ProductModel> _recentProducts(List<ProductModel> products) =>
+      products.take(3).toList();
 
-  List<ProductModel> _lowStockProducts(List<ProductModel> products) {
-    return products
-        .where((p) => p.state == 1 && p.stock > 0 && p.stock <= 3)
-        .toList();
-  }
+  List<ProductModel> _lowStockProducts(List<ProductModel> products) =>
+      products
+          .where((p) => p.state == 1 && p.stock > 0 && p.stock <= 3)
+          .toList();
 
-  List<ProductModel> _soldOutProducts(List<ProductModel> products) {
-    return products.where((p) => p.stock == 0).toList();
-  }
+  List<ProductModel> _soldOutProducts(List<ProductModel> products) =>
+      products.where((p) => p.stock == 0).toList();
 
-  int _activeProducts(List<ProductModel> products) {
-    return products.where((p) => p.state == 1).length;
-  }
+  int _activeProducts(List<ProductModel> products) =>
+      products.where((p) => p.state == 1).length;
 
-  int _pausedProducts(List<ProductModel> products) {
-    return products.where((p) => p.state == 0).length;
-  }
+  int _pausedProducts(List<ProductModel> products) =>
+      products.where((p) => p.state == 0).length;
 
-  int _totalUnits(List<ProductModel> products) {
-    return products.fold(0, (sum, p) => sum + p.stock);
-  }
+  int _totalUnits(List<ProductModel> products) =>
+      products.fold(0, (sum, p) => sum + p.stock);
 
-  double _inventoryValue(List<ProductModel> products) {
-    return products.fold(0.0, (sum, p) => sum + (p.price * p.stock));
-  }
+  double _inventoryValue(List<ProductModel> products) =>
+      products.fold(0.0, (sum, p) => sum + (p.price * p.stock));
 
   double _averagePrice(List<ProductModel> products) {
     if (products.isEmpty) return 0;
@@ -73,23 +63,21 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     return total / products.length;
   }
 
-  String _money(double value) {
-    return value.toStringAsFixed(value % 1 == 0 ? 0 : 1);
-  }
+  String _money(double value) =>
+      value.toStringAsFixed(value % 1 == 0 ? 0 : 1);
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Sin fecha';
-    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
   String _harvestLabel(DateTime? date) {
     if (date == null) return 'Sin fecha de cosecha';
-
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final harvest = DateTime(date.year, date.month, date.day);
     final diff = today.difference(harvest).inDays;
-
     if (diff < 0) return 'Cosecha programada';
     if (diff == 0) return 'Cosechado hoy';
     if (diff == 1) return 'Cosechado hace 1 día';
@@ -118,11 +106,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   Future<void> _goToProducts() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ProducerProductsView(),
-      ),
+      MaterialPageRoute(builder: (_) => const ProducerProductsView()),
     );
-
     if (!mounted) return;
     await _loadDashboardData();
   }
@@ -130,47 +115,34 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   Future<void> _goToCreateProduct() async {
     final created = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ProducerCreateProductView(),
-      ),
+      MaterialPageRoute(builder: (_) => const ProducerCreateProductView()),
     );
-
     if (created == true) {
       await _loadDashboardData();
-
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Producto publicado correctamente'),
-        ),
+        const SnackBar(content: Text('Producto publicado correctamente')),
       );
     }
   }
 
   Future<void> _replenishProduct(ProductModel product) async {
     if (product.id == null) return;
-
     final productController =
-    Provider.of<ProductController>(context, listen: false);
-
+        Provider.of<ProductController>(context, listen: false);
     final newStock = product.stock + 10;
     final success = await productController.updateStock(product.id!, newStock);
-
     if (!mounted) return;
-
     if (success) {
       await _loadDashboardData();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Stock actualizado para ${product.name}'),
-        ),
+        SnackBar(content: Text('Stock actualizado para ${product.name}')),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            productController.errorMessage ?? 'Error al actualizar stock',
-          ),
+              productController.errorMessage ?? 'Error al actualizar stock'),
         ),
       );
     }
@@ -214,83 +186,83 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             color: const Color(0xFFC69A5B),
             child: productController.isLoading
                 ? ListView(
-              children: const [
-                SizedBox(height: 220),
-                Center(
-                  child: CircularProgressIndicator(
-                    color: Color(0xFFC69A5B),
-                  ),
-                ),
-              ],
-            )
-                : ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: _maxWidth(screenWidth),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildTopBar(userController),
-                          const SizedBox(height: 18),
-                          _buildHeroCard(userController, products),
-                          const SizedBox(height: 18),
-                          _buildKpiGrid(products),
-                          const SizedBox(height: 18),
-                          _buildCollectionStatus(products),
-                          const SizedBox(height: 18),
-                          _buildSectionTitle(
-                            title: 'Productos recientes',
-                            actionText: 'Ver productos',
-                            onTap: _goToProducts,
-                          ),
-                          const SizedBox(height: 12),
-                          if (recentProducts.isEmpty)
-                            _buildEmptyCard(
-                              icon: Icons.inventory_2_outlined,
-                              title: 'Aún no tienes productos publicados',
-                              subtitle:
-                              'Publica tu primer producto para que tu catálogo empiece a verse completo.',
-                            )
-                          else
-                            ...recentProducts
-                                .map(_buildRecentProductCard),
-                          const SizedBox(height: 18),
-                          _buildSectionTitle(
-                            title: 'Alertas del catálogo',
-                            actionText: lowStockProducts.isNotEmpty
-                                ? 'Revisar'
-                                : null,
-                            onTap: lowStockProducts.isNotEmpty
-                                ? _goToProducts
-                                : null,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildAlertsPanel(
-                            lowStockProducts: lowStockProducts,
-                            soldOutProducts: soldOutProducts,
-                          ),
-                          const SizedBox(height: 18),
-                          _buildSectionTitle(
-                            title: 'Acciones rápidas',
-                            actionText: null,
-                          ),
-                          const SizedBox(height: 12),
-                          _buildQuickActions(),
-                          const SizedBox(height: 18),
-                          _buildBottomShowcase(products),
-                        ],
+                    children: const [
+                      SizedBox(height: 220),
+                      Center(
+                        child: CircularProgressIndicator(
+                            color: Color(0xFFC69A5B)),
                       ),
-                    ),
+                    ],
+                  )
+                : ListView(
+                    padding: EdgeInsets.zero,
+                    children: [
+                      Center(
+                        child: ConstrainedBox(
+                          constraints:
+                              BoxConstraints(maxWidth: _maxWidth(screenWidth)),
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildTopBar(userController),
+                                const SizedBox(height: 18),
+                                _buildHeroCard(userController, products),
+                                const SizedBox(height: 18),
+                                _buildKpiGrid(products),
+                                const SizedBox(height: 18),
+                                _buildCollectionStatus(products),
+                                const SizedBox(height: 18),
+                                _buildSectionTitle(
+                                  title: 'Productos recientes',
+                                  actionText: 'Ver productos',
+                                  onTap: _goToProducts,
+                                ),
+                                const SizedBox(height: 12),
+                                if (recentProducts.isEmpty)
+                                  _buildEmptyCard(
+                                    icon: Icons.inventory_2_outlined,
+                                    title:
+                                        'Aún no tienes productos publicados',
+                                    subtitle:
+                                        'Publica tu primer producto para que tu catálogo empiece a verse completo.',
+                                  )
+                                else
+                                  ...recentProducts
+                                      .map(_buildRecentProductCard),
+                                const SizedBox(height: 18),
+                                _buildSectionTitle(
+                                  title: 'Alertas del catálogo',
+                                  actionText: lowStockProducts.isNotEmpty
+                                      ? 'Revisar'
+                                      : null,
+                                  onTap: lowStockProducts.isNotEmpty
+                                      ? _goToProducts
+                                      : null,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildAlertsPanel(
+                                  lowStockProducts: lowStockProducts,
+                                  soldOutProducts: soldOutProducts,
+                                ),
+                                const SizedBox(height: 18),
+                                _buildSectionTitle(
+                                  title: 'Acciones rápidas',
+                                  actionText: null,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildQuickActions(),
+                                const SizedBox(height: 18),
+                                _buildBottomShowcase(products),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -301,20 +273,18 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text(
           'Publicar producto',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
       ),
     );
   }
 
+  // ── Top Bar ────────────────────────────────────────────────────────────────
+
   Widget _buildTopBar(UserController userController) {
     final user = userController.currentUser;
-    final initial = (user?.name.isNotEmpty ?? false)
-        ? user!.name[0].toUpperCase()
-        : 'P';
+    final initial =
+        (user?.name.isNotEmpty ?? false) ? user!.name[0].toUpperCase() : 'P';
 
     return Row(
       children: [
@@ -384,11 +354,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           ),
           child: Row(
             children: [
-              const Icon(
-                Icons.monetization_on_outlined,
-                color: Color(0xFFC7942E),
-                size: 18,
-              ),
+              const Icon(Icons.monetization_on_outlined,
+                  color: Color(0xFFC7942E), size: 18),
               const SizedBox(width: 5),
               Text(
                 '${userController.currentUser?.balance.toStringAsFixed(0) ?? '0'}',
@@ -403,21 +370,17 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         const SizedBox(width: 8),
         IconButton(
           onPressed: () async {
-            final controller = Provider.of<UserController>(context, listen: false);
+            final controller =
+                Provider.of<UserController>(context, listen: false);
             await controller.logout();
-
             if (!context.mounted) return;
-
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (_) => const LoginView()),
-                  (route) => false,
+              (route) => false,
             );
           },
-          icon: const Icon(
-            Icons.logout_rounded,
-            color: Color(0xFF4E3426),
-          ),
+          icon: const Icon(Icons.logout_rounded, color: Color(0xFF4E3426)),
           style: IconButton.styleFrom(
             backgroundColor: Colors.white,
             padding: const EdgeInsets.all(10),
@@ -429,7 +392,10 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildHeroCard(UserController userController, List<ProductModel> products) {
+  // ── Hero Card ──────────────────────────────────────────────────────────────
+
+  Widget _buildHeroCard(
+      UserController userController, List<ProductModel> products) {
     final active = _activeProducts(products);
     final lowStock = _lowStockProducts(products).length;
     final totalUnits = _totalUnits(products);
@@ -440,10 +406,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF6B625A),
-            Color(0xFF4F4842),
-          ],
+          colors: [Color(0xFF6B625A), Color(0xFF4F4842)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -491,17 +454,12 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                   runSpacing: 8,
                   children: [
                     _buildHeroChip(
-                      icon: Icons.eco_outlined,
-                      text: 'Catálogo agrícola',
-                    ),
+                        icon: Icons.eco_outlined, text: 'Catálogo agrícola'),
                     _buildHeroChip(
-                      icon: Icons.workspace_premium_outlined,
-                      text: 'Panel premium',
-                    ),
+                        icon: Icons.workspace_premium_outlined,
+                        text: 'Panel premium'),
                     _buildHeroChip(
-                      icon: Icons.bolt_outlined,
-                      text: 'Gestión rápida',
-                    ),
+                        icon: Icons.bolt_outlined, text: 'Gestión rápida'),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -518,49 +476,34 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 const Text(
                   'Controla tu inventario, revisa tus alertas y entra rápido a las pantallas importantes del productor.',
                   style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13.5,
-                    height: 1.35,
-                  ),
+                      color: Colors.white70, fontSize: 13.5, height: 1.35),
                 ),
                 const SizedBox(height: 18),
                 Row(
                   children: [
                     Expanded(
-                      child: _buildHeroStat(
-                        label: 'Activos',
-                        value: active.toString(),
-                      ),
-                    ),
+                        child: _buildHeroStat(
+                            label: 'Activos', value: active.toString())),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _buildHeroStat(
-                        label: 'Stock bajo',
-                        value: lowStock.toString(),
-                      ),
-                    ),
+                        child: _buildHeroStat(
+                            label: 'Stock bajo', value: lowStock.toString())),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _buildHeroStat(
-                        label: 'Unidades',
-                        value: totalUnits.toString(),
-                      ),
-                    ),
+                        child: _buildHeroStat(
+                            label: 'Unidades', value: totalUnits.toString())),
                   ],
                 ),
                 const SizedBox(height: 14),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 14,
-                  ),
+                      horizontal: 14, vertical: 14),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.10),
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.10),
-                    ),
+                    border:
+                        Border.all(color: Colors.white.withOpacity(0.10)),
                   ),
                   child: Row(
                     children: [
@@ -571,10 +514,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                           color: Colors.white.withOpacity(0.14),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: const Icon(
-                          Icons.savings_outlined,
-                          color: Colors.white,
-                        ),
+                        child: const Icon(Icons.savings_outlined,
+                            color: Colors.white),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -607,8 +548,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                           backgroundColor: const Color(0xFFC69A5B),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                              borderRadius: BorderRadius.circular(14)),
                         ),
                         icon: const Icon(Icons.arrow_forward_rounded, size: 18),
                         label: const Text('Entrar'),
@@ -624,18 +564,13 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildHeroChip({
-    required IconData icon,
-    required String text,
-  }) {
+  Widget _buildHeroChip({required IconData icon, required String text}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.12),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.10),
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -655,10 +590,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildHeroStat({
-    required String label,
-    required String value,
-  }) {
+  Widget _buildHeroStat({required String label, required String value}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
@@ -667,27 +599,23 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       ),
       child: Column(
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(value,
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(label,
+              style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
+
+  // ── KPI Grid ───────────────────────────────────────────────────────────────
 
   Widget _buildKpiGrid(List<ProductModel> products) {
     return Row(
@@ -729,10 +657,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFF0E8DC)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10),
         ],
       ),
       child: Column(
@@ -744,35 +669,27 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             child: Icon(icon, color: color, size: 22),
           ),
           const SizedBox(height: 14),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF4E3426),
-            ),
-          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4E3426))),
           const SizedBox(height: 4),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF6C5A4B),
-            ),
-          ),
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6C5A4B))),
           const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: Color(0xFF9A8E80),
-            ),
-          ),
+          Text(subtitle,
+              style: const TextStyle(
+                  fontSize: 11.5, color: Color(0xFF9A8E80))),
         ],
       ),
     );
   }
+
+  // ── Collection Status ──────────────────────────────────────────────────────
 
   Widget _buildCollectionStatus(List<ProductModel> products) {
     final availability = _availabilityPercent(products);
@@ -788,9 +705,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         border: Border.all(color: const Color(0xFFE8DED0)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 12,
-          ),
+              color: Colors.black.withOpacity(0.035), blurRadius: 12),
         ],
       ),
       child: Column(
@@ -799,19 +714,15 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           const Text(
             'Estado general del catálogo',
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF4E3426),
-            ),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF4E3426)),
           ),
           const SizedBox(height: 6),
           const Text(
             'Un vistazo rápido a la salud de tus publicaciones y tu inventario.',
             style: TextStyle(
-              fontSize: 12.5,
-              color: Color(0xFF8C7B6B),
-              height: 1.35,
-            ),
+                fontSize: 12.5, color: Color(0xFF8C7B6B), height: 1.35),
           ),
           const SizedBox(height: 16),
           _buildProgressBlock(
@@ -824,28 +735,22 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           Row(
             children: [
               Expanded(
-                child: _buildMiniMetric(
-                  icon: Icons.savings_outlined,
-                  label: 'Precio promedio',
-                  value: '${_money(averagePrice)} mon.',
-                ),
-              ),
+                  child: _buildMiniMetric(
+                      icon: Icons.savings_outlined,
+                      label: 'Precio promedio',
+                      value: '${_money(averagePrice)} mon.')),
               const SizedBox(width: 10),
               Expanded(
-                child: _buildMiniMetric(
-                  icon: Icons.remove_shopping_cart_outlined,
-                  label: 'Agotados',
-                  value: soldOut.toString(),
-                ),
-              ),
+                  child: _buildMiniMetric(
+                      icon: Icons.remove_shopping_cart_outlined,
+                      label: 'Agotados',
+                      value: soldOut.toString())),
               const SizedBox(width: 10),
               Expanded(
-                child: _buildMiniMetric(
-                  icon: Icons.grid_view_rounded,
-                  label: 'Unidades',
-                  value: _totalUnits(products).toString(),
-                ),
-              ),
+                  child: _buildMiniMetric(
+                      icon: Icons.grid_view_rounded,
+                      label: 'Unidades',
+                      value: _totalUnits(products).toString())),
             ],
           ),
         ],
@@ -860,7 +765,6 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     required String rightText,
   }) {
     final safePercent = percent.clamp(0.0, 1.0);
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -871,14 +775,11 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF5B4332),
-              fontWeight: FontWeight.w700,
-              fontSize: 13.5,
-            ),
-          ),
+          Text(title,
+              style: const TextStyle(
+                  color: Color(0xFF5B4332),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13.5)),
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
@@ -886,39 +787,30 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               value: safePercent,
               minHeight: 10,
               backgroundColor: const Color(0xFFE9DECF),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFFC69A5B)),
+              valueColor:
+                  const AlwaysStoppedAnimation(Color(0xFFC69A5B)),
             ),
           ),
           const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
-                child: Text(
-                  leftText,
+                  child: Text(leftText,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF8A7A6A),
+                          fontWeight: FontWeight.w600))),
+              Text('${(safePercent * 100).toStringAsFixed(0)}%',
                   style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF8A7A6A),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Text(
-                '${(safePercent * 100).toStringAsFixed(0)}%',
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: Color(0xFFC7942E),
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+                      fontSize: 12.5,
+                      color: Color(0xFFC7942E),
+                      fontWeight: FontWeight.bold)),
               const SizedBox(width: 8),
-              Text(
-                rightText,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF8A7A6A),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text(rightText,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF8A7A6A),
+                      fontWeight: FontWeight.w600)),
             ],
           ),
         ],
@@ -942,28 +834,24 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         children: [
           Icon(icon, color: const Color(0xFFC69A5B), size: 22),
           const SizedBox(height: 10),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF4E3426),
-            ),
-          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4E3426))),
           const SizedBox(height: 4),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: Color(0xFF8C7B6B),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFF8C7B6B),
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );
   }
+
+  // ── Section Title ──────────────────────────────────────────────────────────
 
   Widget _buildSectionTitle({
     required String title,
@@ -973,34 +861,31 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF4E3426),
-            ),
-          ),
+          child: Text(title,
+              style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4E3426))),
         ),
         if (actionText != null)
           InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(14),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Text(
-                actionText,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: Color(0xFFC7942E),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Text(actionText,
+                  style: const TextStyle(
+                      fontSize: 12.5,
+                      color: Color(0xFFC7942E),
+                      fontWeight: FontWeight.w700)),
             ),
           ),
       ],
     );
   }
+
+  // ── Recent Product Card ────────────────────────────────────────────────────
 
   Widget _buildRecentProductCard(ProductModel product) {
     final statusColor = _productStatusColor(product);
@@ -1015,36 +900,18 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         border: Border.all(color: const Color(0xFFF0E8DC)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 12,
-          ),
+              color: Colors.black.withOpacity(0.035), blurRadius: 12),
         ],
       ),
       child: Row(
         children: [
-          Container(
+          // ── Imagen ──────────────────────────────────────────────────────
+          AppImage(
+            src: product.picture,
             width: 72,
             height: 72,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5F0E8),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: product.picture != null && product.picture!.isNotEmpty
-                ? ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Image.network(
-                product.picture!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) {
-                  return const Icon(
-                    Icons.image_not_supported_outlined,
-                    color: Color(0xFFC69A5B),
-                    size: 30,
-                  );
-                },
-              ),
-            )
-                : const Icon(
+            borderRadius: 18,
+            placeholder: const Icon(
               Icons.inventory_2_outlined,
               color: Color(0xFFC69A5B),
               size: 30,
@@ -1060,10 +927,9 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF4E3426),
-                  ),
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4E3426)),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1071,10 +937,9 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12.5,
-                    color: Color(0xFF8C7B6B),
-                    height: 1.3,
-                  ),
+                      fontSize: 12.5,
+                      color: Color(0xFF8C7B6B),
+                      height: 1.3),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -1084,7 +949,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                     _buildSoftTag(
                       icon: Icons.payments_outlined,
                       text:
-                      '${_money(product.price)} mon. / ${product.unit ?? 'unidad'}',
+                          '${_money(product.price)} mon. / ${product.unit ?? 'unidad'}',
                     ),
                     _buildSoftTag(
                       icon: Icons.inventory_2_outlined,
@@ -1106,10 +971,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildSoftTag({
-    required IconData icon,
-    required String text,
-  }) {
+  Widget _buildSoftTag({required IconData icon, required String text}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
@@ -1122,14 +984,11 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         children: [
           Icon(icon, size: 14, color: const Color(0xFF8A6A45)),
           const SizedBox(width: 5),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 11.5,
-              color: Color(0xFF6D5A49),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(text,
+              style: const TextStyle(
+                  fontSize: 11.5,
+                  color: Color(0xFF6D5A49),
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -1143,16 +1002,13 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.20)),
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      child: Text(text,
+          style: TextStyle(
+              color: color, fontSize: 11.5, fontWeight: FontWeight.w700)),
     );
   }
+
+  // ── Alerts Panel ───────────────────────────────────────────────────────────
 
   Widget _buildAlertsPanel({
     required List<ProductModel> lowStockProducts,
@@ -1163,38 +1019,37 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         icon: Icons.check_circle_outline_rounded,
         title: 'Todo se ve en orden',
         subtitle:
-        'No hay productos con stock bajo ni agotados en este momento.',
+            'No hay productos con stock bajo ni agotados en este momento.',
       );
     }
 
     return Column(
       children: [
-        if (lowStockProducts.isNotEmpty) ...[
+        if (lowStockProducts.isNotEmpty)
           ...lowStockProducts.take(2).map(
                 (product) => _buildAlertCard(
-              product: product,
-              title: 'Stock bajo',
-              subtitle: 'Solo quedan ${product.stock} unidades disponibles',
-              icon: Icons.warning_amber_rounded,
-              accent: const Color(0xFFD96C2F),
-              buttonText: 'Reponer',
-              onTap: () => _replenishProduct(product),
-            ),
-          ),
-        ],
-        if (soldOutProducts.isNotEmpty) ...[
+                  product: product,
+                  title: 'Stock bajo',
+                  subtitle:
+                      'Solo quedan ${product.stock} unidades disponibles',
+                  icon: Icons.warning_amber_rounded,
+                  accent: const Color(0xFFD96C2F),
+                  buttonText: 'Reponer',
+                  onTap: () => _replenishProduct(product),
+                ),
+              ),
+        if (soldOutProducts.isNotEmpty)
           ...soldOutProducts.take(2).map(
                 (product) => _buildAlertCard(
-              product: product,
-              title: 'Producto agotado',
-              subtitle: 'Este producto ya no tiene stock disponible',
-              icon: Icons.remove_shopping_cart_outlined,
-              accent: const Color(0xFFB65E2E),
-              buttonText: 'Ver catálogo',
-              onTap: _goToProducts,
-            ),
-          ),
-        ],
+                  product: product,
+                  title: 'Producto agotado',
+                  subtitle: 'Este producto ya no tiene stock disponible',
+                  icon: Icons.remove_shopping_cart_outlined,
+                  accent: const Color(0xFFB65E2E),
+                  buttonText: 'Ver catálogo',
+                  onTap: _goToProducts,
+                ),
+              ),
       ],
     );
   }
@@ -1216,10 +1071,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: accent.withOpacity(0.28)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8),
         ],
       ),
       child: Column(
@@ -1228,42 +1080,23 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             children: [
               Icon(icon, color: accent, size: 18),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: TextStyle(
-                  color: const Color(0xFF5A4333),
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              Text(title,
+                  style: const TextStyle(
+                      color: Color(0xFF5A4333),
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              Container(
+              // ── Imagen ────────────────────────────────────────────────
+              AppImage(
+                src: product.picture,
                 width: 62,
                 height: 62,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F0E8),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: product.picture != null && product.picture!.isNotEmpty
-                    ? ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Image.network(
-                    product.picture!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) {
-                      return const Icon(
-                        Icons.inventory_2_outlined,
-                        color: Color(0xFFC69A5B),
-                        size: 28,
-                      );
-                    },
-                  ),
-                )
-                    : const Icon(
+                borderRadius: 18,
+                placeholder: const Icon(
                   Icons.inventory_2_outlined,
                   color: Color(0xFFC69A5B),
                   size: 28,
@@ -1274,32 +1107,23 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      product.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        color: Color(0xFF4E3426),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text(product.name,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF4E3426),
+                            fontWeight: FontWeight.bold)),
                     const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        color: accent,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    Text(subtitle,
+                        style: TextStyle(
+                            fontSize: 12.5,
+                            color: accent,
+                            fontWeight: FontWeight.w700)),
                     const SizedBox(height: 3),
-                    Text(
-                      _formatDate(product.harvestDate),
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: Color(0xFF8C7B6B),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text(_formatDate(product.harvestDate),
+                        style: const TextStyle(
+                            fontSize: 11.5,
+                            color: Color(0xFF8C7B6B),
+                            fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -1311,12 +1135,9 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
+                      borderRadius: BorderRadius.circular(14)),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                      horizontal: 16, vertical: 12),
                 ),
                 child: Text(buttonText),
               ),
@@ -1326,6 +1147,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       ),
     );
   }
+
+  // ── Quick Actions ──────────────────────────────────────────────────────────
 
   Widget _buildQuickActions() {
     return Column(
@@ -1394,9 +1217,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           border: Border.all(color: const Color(0xFFF0E8DC)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.035),
-              blurRadius: 10,
-            ),
+                color: Colors.black.withOpacity(0.035), blurRadius: 10),
           ],
         ),
         child: Column(
@@ -1405,35 +1226,28 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             CircleAvatar(
               radius: 22,
               backgroundColor: const Color(0xFFF5F0E8),
-              child: Icon(
-                icon,
-                color: const Color(0xFFC69A5B),
-                size: 23,
-              ),
+              child:
+                  Icon(icon, color: const Color(0xFFC69A5B), size: 23),
             ),
             const SizedBox(height: 14),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF4E3426),
-              ),
-            ),
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4E3426))),
             const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF8C7B6B),
-                height: 1.35,
-              ),
-            ),
+            Text(subtitle,
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF8C7B6B),
+                    height: 1.35)),
           ],
         ),
       ),
     );
   }
+
+  // ── Bottom Showcase ────────────────────────────────────────────────────────
 
   Widget _buildBottomShowcase(List<ProductModel> products) {
     return Container(
@@ -1444,10 +1258,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: const Color(0xFFF0E8DC)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 12,
-          ),
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 12),
         ],
       ),
       child: Row(
@@ -1458,19 +1269,13 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
               gradient: const LinearGradient(
-                colors: [
-                  Color(0xFFC69A5B),
-                  Color(0xFFB58448),
-                ],
+                colors: [Color(0xFFC69A5B), Color(0xFFB58448)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
             ),
-            child: const Icon(
-              Icons.auto_awesome_rounded,
-              color: Colors.white,
-              size: 34,
-            ),
+            child: const Icon(Icons.auto_awesome_rounded,
+                color: Colors.white, size: 34),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -1480,21 +1285,19 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 const Text(
                   'Tu panel está listo',
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF4E3426),
-                  ),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4E3426)),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   products.isEmpty
                       ? 'Empieza publicando tus productos para ver crecer tu dashboard.'
-                      : 'Ya tienes ${products.length} producto${products.length == 1 ? '' : 's'} en tu catálogo. Sigue actualizando tu stock para que todo se vea impecable.',
+                      : 'Ya tienes ${products.length} producto${products.length == 1 ? '' : 's'} en tu catálogo. Sigue actualizando tu stock.',
                   style: const TextStyle(
-                    fontSize: 12.5,
-                    color: Color(0xFF8C7B6B),
-                    height: 1.35,
-                  ),
+                      fontSize: 12.5,
+                      color: Color(0xFF8C7B6B),
+                      height: 1.35),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -1505,8 +1308,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                         backgroundColor: const Color(0xFFC69A5B),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                            borderRadius: BorderRadius.circular(14)),
                       ),
                       icon: const Icon(Icons.storefront_outlined, size: 18),
                       label: const Text('Productos'),
@@ -1518,8 +1320,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                         foregroundColor: const Color(0xFF8A6A45),
                         side: const BorderSide(color: Color(0xFFE2D4C2)),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                            borderRadius: BorderRadius.circular(14)),
                       ),
                       icon: const Icon(Icons.add_box_outlined, size: 18),
                       label: const Text('Publicar'),
@@ -1533,6 +1334,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       ),
     );
   }
+
+  // ── Empty Card ─────────────────────────────────────────────────────────────
 
   Widget _buildEmptyCard({
     required IconData icon,
@@ -1552,32 +1355,20 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           CircleAvatar(
             radius: 32,
             backgroundColor: const Color(0xFFF5F0E8),
-            child: Icon(
-              icon,
-              size: 30,
-              color: const Color(0xFFC69A5B),
-            ),
+            child: Icon(icon, size: 30, color: const Color(0xFFC69A5B)),
           ),
           const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Color(0xFF6C5A4B),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 16,
+                  color: Color(0xFF6C5A4B),
+                  fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF958575),
-              height: 1.4,
-            ),
-          ),
+          Text(subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 13, color: Color(0xFF958575), height: 1.4)),
         ],
       ),
     );

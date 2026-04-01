@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../controllers/cart_controller.dart';
 import '../../controllers/user_controller.dart';
 import '../../models/cart_item_model.dart';
-
+import '../../core/image_helper.dart';
 class ClientCartView extends StatelessWidget {
   const ClientCartView({super.key});
 
@@ -428,32 +428,17 @@ class _CartItemCard extends StatelessWidget {
         child: Row(
           children: [
             // Imagen
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F0E8),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: item.picture != null && item.picture!.isNotEmpty
-                    ? Image.network(
-                        item.picture!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.eco_outlined,
-                          color: Color(0xFF5A8A5A),
-                          size: 30,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.eco_outlined,
-                        color: Color(0xFF5A8A5A),
-                        size: 30,
-                      ),
-              ),
-            ),
+            AppImage(
+  src: item.picture,
+  width: 72,
+  height: 72,
+  borderRadius: 16,
+  placeholder: const Icon(
+    Icons.eco_outlined,
+    color: Color(0xFF5A8A5A),
+    size: 30,
+  ),
+),
 
             const SizedBox(width: 12),
 

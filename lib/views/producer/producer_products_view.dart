@@ -6,7 +6,7 @@ import '../../controllers/user_controller.dart';
 import '../../models/product_model.dart';
 import 'producer_create_product_view.dart';
 import 'producer_edit_product_view.dart';
-
+import '../../core/image_helper.dart';
 class ProducerProductsView extends StatefulWidget {
   const ProducerProductsView({super.key});
 
@@ -1139,60 +1139,39 @@ class _ProducerProductsViewState extends State<ProducerProductsView> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Stack(
-                  children: [
-                    Container(
-                      width: 98,
-                      height: 98,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F0E8),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: product.picture != null &&
-                          product.picture!.isNotEmpty
-                          ? ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: Image.network(
-                          product.picture!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Icon(
-                              Icons.image_not_supported_outlined,
-                              color: Color(0xFF888888),
-                              size: 42,
-                            );
-                          },
-                        ),
-                      )
-                          : const Icon(
-                        Icons.inventory_2_outlined,
-                        color: Color(0xFFC69A5B),
-                        size: 42,
-                      ),
-                    ),
-                    Positioned(
-                      left: 8,
-                      bottom: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.92),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          product.unit ?? 'unidad',
-                          style: const TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF2E8B57),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+  children: [
+    AppImage(
+      src: product.picture,
+      width: 98,
+      height: 98,
+      borderRadius: 20,
+      placeholder: const Icon(
+        Icons.inventory_2_outlined,
+        color: Color(0xFFC69A5B),
+        size: 42,
+      ),
+    ),
+    Positioned(
+      left: 8,
+      bottom: 8,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          product.unit ?? 'unidad',
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF2E8B57),
+          ),
+        ),
+      ),
+    ),
+  ],
+),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(

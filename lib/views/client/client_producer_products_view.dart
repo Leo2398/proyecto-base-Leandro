@@ -5,6 +5,7 @@ import '../../controllers/cart_controller.dart';
 import '../../controllers/product_controller.dart';
 import '../../models/product_model.dart';
 import '../../models/user_model.dart';
+import '../../core/image_helper.dart';
 
 class ClientProducerProductsView extends StatefulWidget {
   final UserModel producer;
@@ -690,34 +691,17 @@ class _ClientProducerProductsViewState
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 92,
-                  height: 92,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F0E8),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: product.picture != null && product.picture!.isNotEmpty
-                      ? ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Image.network(
-                      product.picture!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) {
-                        return const Icon(
-                          Icons.image_not_supported_outlined,
-                          color: Color(0xFF5A8A5A),
-                          size: 34,
-                        );
-                      },
-                    ),
-                  )
-                      : const Icon(
-                    Icons.eco_outlined,
-                    color: Color(0xFF5A8A5A),
-                    size: 34,
-                  ),
-                ),
+                AppImage(
+  src: product.picture,
+  width: 92,
+  height: 92,
+  borderRadius: 20,
+  placeholder: const Icon(
+    Icons.eco_outlined,
+    color: Color(0xFF5A8A5A),
+    size: 34,
+  ),
+),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
