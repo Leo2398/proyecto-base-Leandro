@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../controllers/product_controller.dart';
 import '../../controllers/user_controller.dart';
-import '../../core/cloudinary_helper.dart';
+import '../../core/image_helper.dart';
 import '../../models/product_model.dart';
 
 class ProducerCreateProductView extends StatefulWidget {
@@ -93,7 +93,7 @@ class _ProducerCreateProductViewState
       _uploadedImageUrl = null;
     });
 
-    final url = await CloudinaryHelper.uploadImage(_selectedImage!);
+   final url = await ImageHelper.toBase64(_selectedImage!);
 
     if (!mounted) return;
     setState(() {

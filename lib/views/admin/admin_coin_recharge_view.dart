@@ -1,19 +1,20 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../core/cloudinary_helper.dart';
-import '../../models/coin_recharge_model.dart';
-import '../../services/app_config_service.dart';
-import '../../services/coin_recharge_service.dart';
+import 'package:provider/provider.dart';
+import '../../controllers/user_controller.dart';
+import '../../core/image_helper.dart';
+import '../../models/app_config_model.dart';
+import '../../models/request_model.dart';
+import '../../services/request_service.dart';
 
 /// Vista de administración de recargas de monedas
-/// Permite configurar el QR, el valor de la moneda y gestionar solicitudes
+/// Solo lado admin: configurar QR, valor de moneda y gestionar solicitudes
 class AdminCoinRechargeView extends StatefulWidget {
   const AdminCoinRechargeView({super.key});
 
   @override
-  State<AdminCoinRechargeView> createState() =>
-      _AdminCoinRechargeViewState();
+  State<AdminCoinRechargeView> createState() => _AdminCoinRechargeViewState();
 }
 
 class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
@@ -23,49 +24,40 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
   static const _textSub = Color(0xFF888888);
   static const _green = Color(0xFF5A8A5A);
 
-  final _configService = AppConfigService();
-  final _rechargeService = CoinRechargeService();
-  final _coinValueCtrl = TextEditingController();
+  final _service = RequestService();
+  final _coinCtrl = TextEditingController();
 
-  String? _qrImageUrl;
-  double _coinValueBs = 1.0;
-  List<CoinRechargeModel> _pending = [];
-  List<CoinRechargeModel> _history = [];
+  AppConfigModel _config = AppConfigModel.defaults;
+  List<RequestModel> _pending = [];
+  List<RequestModel> _history = [];
   bool _loadingConfig = true;
   bool _loadingRequests = true;
-  bool _savingValue = false;
+  bool _savingCoin = false;
   bool _uploadingQr = false;
 
   @override
   void initState() {
     super.initState();
-    _init();
+    _load();
   }
 
   @override
   void dispose() {
-    _coinValueCtrl.dispose();
+    _coinCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _init() async {
-    await Future.wait([
-      _configService.initTable(),
-      _rechargeService.initTable(),
-    ]);
-    await _loadConfig();
-    await _loadRequests();
+  Future<void> _load() async {
+    await Future.wait([_loadConfig(), _loadRequests()]);
   }
 
   Future<void> _loadConfig() async {
     setState(() => _loadingConfig = true);
-    final qr = await _configService.getQrImageUrl();
-    final val = await _configService.getCoinValueBs();
+    final config = await _service.getAppConfig();
     if (mounted) {
       setState(() {
-        _qrImageUrl = qr;
-        _coinValueBs = val;
-        _coinValueCtrl.text = val.toStringAsFixed(2);
+        _config = config;
+        _coinCtrl.text = config.bsPerCoin.toStringAsFixed(2);
         _loadingConfig = false;
       });
     }
@@ -73,86 +65,92 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
 
   Future<void> _loadRequests() async {
     setState(() => _loadingRequests = true);
-    final pending = await _rechargeService.getPendingRequests();
-    final all = await _rechargeService.getAllRequests();
+    final all = await _service.getAllRequests();
     if (mounted) {
       setState(() {
-        _pending = pending;
-        _history = all.where((r) => r.status != 'pending').toList();
+        _pending = all.where((r) => r.state == 0).toList();
+        _history = all.where((r) => r.state != 0).toList();
         _loadingRequests = false;
       });
     }
   }
 
   Future<void> _saveCoinValue() async {
-    final val = double.tryParse(_coinValueCtrl.text.replaceAll(',', '.'));
+    final val = double.tryParse(_coinCtrl.text.replaceAll(',', '.'));
     if (val == null || val <= 0) {
       _snack('Ingresa un valor válido mayor a 0', error: true);
       return;
     }
-    setState(() => _savingValue = true);
-    final ok = await _configService.setCoinValueBs(val);
+    setState(() => _savingCoin = true);
+    final ok = await _service.updateBsPerCoin(val);
     if (mounted) {
-      setState(() {
-        _savingValue = false;
-        if (ok) _coinValueBs = val;
-      });
-      _snack(ok ? 'Valor actualizado correctamente' : 'Error al guardar',
-          error: !ok);
+      setState(() => _savingCoin = false);
+      if (ok) {
+        setState(() => _config = AppConfigModel(bsPerCoin: val, qrImage: _config.qrImage));
+        _snack('Valor actualizado correctamente');
+      } else {
+        _snack('Error al guardar el valor', error: true);
+      }
     }
   }
 
-  Future<void> _pickAndUploadQr() async {
+  Future<void> _pickAndSaveQr() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(
-        source: ImageSource.gallery, imageQuality: 80);
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked == null) return;
 
     setState(() => _uploadingQr = true);
-    final url = await CloudinaryHelper.uploadImage(File(picked.path));
-    if (url != null) {
-      final saved = await _configService.setQrImageUrl(url);
-      if (mounted) {
-        setState(() {
-          if (saved) _qrImageUrl = url;
-          _uploadingQr = false;
-        });
-        _snack(saved ? 'QR actualizado correctamente' : 'Error al guardar QR',
-            error: !saved);
-      }
-    } else {
+    final base64 = await ImageHelper.toBase64(File(picked.path));
+    if (base64 == null) {
       if (mounted) {
         setState(() => _uploadingQr = false);
-        _snack('Error al subir la imagen', error: true);
+        _snack('Error al procesar la imagen', error: true);
+      }
+      return;
+    }
+    final ok = await _service.updateQrImage(base64);
+    if (mounted) {
+      setState(() => _uploadingQr = false);
+      if (ok) {
+        setState(() => _config = AppConfigModel(bsPerCoin: _config.bsPerCoin, qrImage: base64));
+        _snack('QR actualizado correctamente');
+      } else {
+        _snack('Error al guardar el QR', error: true);
       }
     }
   }
 
-  Future<void> _approve(CoinRechargeModel req) async {
-    final ok = await _rechargeService.approveRequest(req.id!);
+  int get _adminId =>
+      Provider.of<UserController>(context, listen: false).currentUser?.id ?? 0;
+
+  Future<void> _approve(RequestModel req) async {
+    final ok = await _service.approveRequest(
+      requestID: req.id!,
+      adminID: _adminId,
+    );
     if (mounted) {
       _snack(ok
-          ? 'Recarga aprobada. Se acreditaron ${req.coinsRequested} monedas a ${req.userName}'
-          : 'Error al aprobar');
+          ? 'Recarga aprobada. Se acreditaron ${req.value} monedas a ${req.userName ?? "usuario"}'
+          : 'Error al aprobar la solicitud',
+          error: !ok);
       if (ok) _loadRequests();
     }
   }
 
-  Future<void> _confirmReject(CoinRechargeModel req) async {
-    // Primera confirmación
+  Future<void> _confirmReject(RequestModel req) async {
     final first = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Rechazar solicitud',
             style: TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
-            '¿Deseas rechazar la solicitud de ${req.userName} por ${req.coinsRequested} monedas?'),
+            '¿Deseas rechazar la solicitud de ${req.userName ?? "usuario"} por ${req.value} monedas?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -163,72 +161,63 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
     );
     if (first != true) return;
 
-    // Segunda confirmación
     final second = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Confirmar rechazo',
-            style: TextStyle(
-                fontWeight: FontWeight.bold, color: Colors.red)),
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
         content: Text(
-            '¿Estás seguro? Esta acción NO se puede deshacer.\n\nEl usuario "${req.userName}" NO recibirá las ${req.coinsRequested} monedas.'),
+            '¿Estas seguro? Esta accion NO se puede deshacer.\n\n'
+            '"${req.userName ?? "Usuario"}" NO recibira las ${req.value} monedas.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white),
-            child: const Text('Sí, rechazar definitivamente'),
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
+            child: const Text('Si, rechazar definitivamente'),
           ),
         ],
       ),
     );
     if (second != true) return;
 
-    final ok = await _rechargeService.rejectRequest(req.id!);
+    final ok = await _service.rejectRequest(requestID: req.id!, adminID: _adminId);
     if (mounted) {
       _snack(ok ? 'Solicitud rechazada' : 'Error al rechazar', error: !ok);
       if (ok) _loadRequests();
     }
   }
 
-  void _showProof(String? imageUrl) {
-    if (imageUrl == null || imageUrl.isEmpty) {
+  void _showProof(String? image) {
+    if (image == null || image.isEmpty) {
       _snack('No hay comprobante adjunto');
       return;
     }
     showDialog(
       context: context,
       builder: (_) => Dialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: const Text('Comprobante de pago',
-                  style: TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold)),
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Comprobante de pago',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
             ClipRRect(
               borderRadius:
                   const BorderRadius.vertical(bottom: Radius.circular(16)),
-              child: Image.network(
-                imageUrl,
+              child: AppImage(
+                src: image,
+                width: double.infinity,
                 fit: BoxFit.contain,
-                loadingBuilder: (_, child, progress) => progress == null
-                    ? child
-                    : const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: CircularProgressIndicator(),
-                      ),
-                errorBuilder: (_, __, ___) => const Padding(
+                placeholder: const Padding(
                   padding: EdgeInsets.all(32),
                   child: Icon(Icons.broken_image_outlined,
                       size: 48, color: Colors.grey),
@@ -251,11 +240,11 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
     ));
   }
 
-  String _timeAgo(DateTime date) {
+  String _timeAgo(DateTime? date) {
+    if (date == null) return '';
     final diff = DateTime.now().difference(date);
-    if (diff.inDays > 0) return 'Hace ${diff.inDays} dia${diff.inDays > 1 ? 's' : ''}';
-    if (diff.inHours > 0)
-      return 'Hace ${diff.inHours} hora${diff.inHours > 1 ? 's' : ''}';
+    if (diff.inDays > 0) return 'Hace ${diff.inDays} dia${diff.inDays > 1 ? "s" : ""}';
+    if (diff.inHours > 0) return 'Hace ${diff.inHours} hora${diff.inHours > 1 ? "s" : ""}';
     if (diff.inMinutes > 0) return 'Hace ${diff.inMinutes} min';
     return 'Ahora mismo';
   }
@@ -272,15 +261,11 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Recarga de Monedas',
-            style: TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold, color: _text)),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: _text)),
       ),
       body: RefreshIndicator(
         color: _primary,
-        onRefresh: () async {
-          await _loadConfig();
-          await _loadRequests();
-        },
+        onRefresh: _load,
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
@@ -297,7 +282,8 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
     );
   }
 
-  // ─── Configuración de moneda y QR ────────────────────────────────────────
+  // ─── Tarjeta de configuración ─────────────────────────────────────────────
+
   Widget _buildConfigCard() {
     return Container(
       padding: const EdgeInsets.all(18),
@@ -316,9 +302,7 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
         children: [
           const Text('Configuracion de Moneda',
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _text)),
+                  fontSize: 16, fontWeight: FontWeight.bold, color: _text)),
           const SizedBox(height: 16),
 
           // Valor de la moneda
@@ -328,39 +312,36 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
           Row(children: [
             Expanded(
               child: TextField(
-                controller: _coinValueCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                controller: _coinCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   suffixText: 'Bs',
                   filled: true,
                   fillColor: const Color(0xFFF8F5EF),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide:
-                          const BorderSide(color: Color(0xFFE0D9CC))),
+                      borderSide: const BorderSide(color: Color(0xFFE0D9CC))),
                   enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide:
-                          const BorderSide(color: Color(0xFFE0D9CC))),
+                      borderSide: const BorderSide(color: Color(0xFFE0D9CC))),
                 ),
               ),
             ),
             const SizedBox(width: 10),
             ElevatedButton(
-              onPressed: _savingValue ? null : _saveCoinValue,
+              onPressed: _savingCoin ? null : _saveCoinValue,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 18, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10)),
                 elevation: 0,
               ),
-              child: _savingValue
+              child: _savingCoin
                   ? const SizedBox(
                       width: 18,
                       height: 18,
@@ -377,8 +358,8 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
           const SizedBox(height: 10),
           Center(
             child: Container(
-              width: 140,
-              height: 140,
+              width: 160,
+              height: 160,
               decoration: BoxDecoration(
                 color: const Color(0xFFF8F5EF),
                 borderRadius: BorderRadius.circular(12),
@@ -387,17 +368,14 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
               child: _loadingConfig
                   ? const Center(
                       child: CircularProgressIndicator(color: _primary))
-                  : _qrImageUrl != null && _qrImageUrl!.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(11),
-                          child: Image.network(_qrImageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.qr_code,
-                                  size: 60,
-                                  color: _textSub)),
-                        )
-                      : const Column(
+                  : ClipRRect(
+                      borderRadius: BorderRadius.circular(11),
+                      child: AppImage(
+                        src: _config.qrImage,
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                        placeholder: const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.qr_code,
@@ -406,18 +384,21 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
                             Text('Subir QR oficial',
                                 style: TextStyle(
                                     fontSize: 11, color: _textSub)),
-                            Text('PNG, JPG hasta 5MB',
+                            Text('PNG, JPG',
                                 style: TextStyle(
-                                    fontSize: 10, color: Color(0xFFCCC5B9))),
+                                    fontSize: 10,
+                                    color: Color(0xFFCCC5B9))),
                           ],
                         ),
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: _uploadingQr ? null : _pickAndUploadQr,
+              onPressed: _uploadingQr ? null : _pickAndSaveQr,
               icon: _uploadingQr
                   ? const SizedBox(
                       width: 16,
@@ -425,7 +406,7 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: _primary))
                   : const Icon(Icons.upload_outlined, size: 18),
-              label: Text(_uploadingQr ? 'Subiendo...' : 'Actualizar QR'),
+              label: Text(_uploadingQr ? 'Procesando...' : 'Actualizar QR'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _primary,
                 side: const BorderSide(color: _primary),
@@ -441,106 +422,96 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
   }
 
   // ─── Solicitudes pendientes ───────────────────────────────────────────────
+
   Widget _buildPendingSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          const Text('Solicitudes de Recarga',
+          const Text('Solicitudes pendientes',
               style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _text)),
+                  fontSize: 16, fontWeight: FontWeight.bold, color: _text)),
           const Spacer(),
           if (_pending.isNotEmpty)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.orange.shade100,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Text('${_pending.length} pendiente${_pending.length > 1 ? 's' : ''}',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.orange.shade700,
-                      fontWeight: FontWeight.bold)),
+              child: Text(
+                '${_pending.length} pendiente${_pending.length > 1 ? "s" : ""}',
+                style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.bold),
+              ),
             ),
         ]),
         const SizedBox(height: 12),
         if (_loadingRequests)
           const Center(child: CircularProgressIndicator(color: _primary))
         else if (_pending.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14)),
-            child: const Column(children: [
-              Icon(Icons.check_circle_outline,
-                  size: 36, color: Color(0xFF5A8A5A)),
-              SizedBox(height: 8),
-              Text('Sin solicitudes pendientes',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D2D2D))),
-            ]),
-          )
+          _emptyCard(Icons.check_circle_outline, _green, 'Sin solicitudes pendientes')
         else
           ..._pending.map((r) => _PendingCard(
                 req: r,
-                timeAgo: _timeAgo(r.requestDate),
-                coinValueBs: _coinValueBs,
+                timeAgo: _timeAgo(r.registerDate),
                 onApprove: () => _approve(r),
                 onReject: () => _confirmReject(r),
-                onViewProof: () => _showProof(r.proofImage),
+                onViewProof: () => _showProof(r.image),
               )),
       ],
     );
   }
 
   // ─── Historial ────────────────────────────────────────────────────────────
+
   Widget _buildHistorySection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Historial de Recargas',
             style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: _text)),
+                fontSize: 16, fontWeight: FontWeight.bold, color: _text)),
         const SizedBox(height: 12),
         if (_loadingRequests)
           const SizedBox()
         else if (_history.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14)),
-            child: const Center(
-              child: Text('Sin historial aún',
-                  style: TextStyle(fontSize: 13, color: _textSub)),
-            ),
-          )
+          _emptyCard(Icons.history, _textSub, 'Sin historial aun')
         else
           ..._history.map((r) => _HistoryRow(
                 req: r,
-                onViewProof: () => _showProof(r.proofImage),
+                onViewProof: () => _showProof(r.image),
               )),
       ],
     );
   }
+
+  Widget _emptyCard(IconData icon, Color color, String label) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+          color: Colors.white, borderRadius: BorderRadius.circular(14)),
+      child: Column(children: [
+        Icon(icon, size: 36, color: color),
+        const SizedBox(height: 8),
+        Text(label,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D2D2D))),
+      ]),
+    );
+  }
 }
 
-// ─── Card de solicitud pendiente ─────────────────────────────────────────────
+// ─── Card de solicitud pendiente ──────────────────────────────────────────────
+
 class _PendingCard extends StatelessWidget {
-  final CoinRechargeModel req;
+  final RequestModel req;
   final String timeAgo;
-  final double coinValueBs;
   final VoidCallback onApprove;
   final VoidCallback onReject;
   final VoidCallback onViewProof;
@@ -548,7 +519,6 @@ class _PendingCard extends StatelessWidget {
   const _PendingCard({
     required this.req,
     required this.timeAgo,
-    required this.coinValueBs,
     required this.onApprove,
     required this.onReject,
     required this.onViewProof,
@@ -572,24 +542,20 @@ class _PendingCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // Header usuario
           Row(children: [
             CircleAvatar(
               radius: 20,
-              backgroundColor: const Color(0xFFB8860B).withOpacity(0.15),
-              backgroundImage:
-                  (req.userImage != null && req.userImage!.isNotEmpty)
-                      ? NetworkImage(req.userImage!)
-                      : null,
-              child: (req.userImage == null || req.userImage!.isEmpty)
-                  ? Text(
-                      req.userName?.isNotEmpty == true
-                          ? req.userName![0].toUpperCase()
-                          : 'U',
-                      style: const TextStyle(
-                          color: Color(0xFFB8860B),
-                          fontWeight: FontWeight.bold))
-                  : null,
+              backgroundColor:
+                  const Color(0xFFB8860B).withOpacity(0.15),
+              child: Text(
+                req.userName?.isNotEmpty == true
+                    ? req.userName![0].toUpperCase()
+                    : 'U',
+                style: const TextStyle(
+                    color: Color(0xFFB8860B),
+                    fontWeight: FontWeight.bold),
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -608,8 +574,7 @@ class _PendingCard extends StatelessWidget {
               ),
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: Colors.orange.shade50,
                 borderRadius: BorderRadius.circular(8),
@@ -623,19 +588,17 @@ class _PendingCard extends StatelessWidget {
           ]),
           const SizedBox(height: 12),
 
-          // Info
+          // Info monedas y monto
           Row(children: [
-            _InfoBadge(
-                label: 'Monedas solicitadas', value: '${req.coinsRequested}'),
-            const SizedBox(width: 12),
+            _InfoBadge(label: 'Monedas', value: '${req.value}'),
+            const SizedBox(width: 20),
             _InfoBadge(
                 label: 'Monto pagado',
-                value: '${req.amountPaid.toStringAsFixed(0)} Bs'),
+                value: '${req.amount.toStringAsFixed(0)} Bs'),
           ]),
           const SizedBox(height: 6),
           Text(timeAgo,
-              style: const TextStyle(
-                  fontSize: 11, color: Color(0xFFAAAAAA))),
+              style: const TextStyle(fontSize: 11, color: Color(0xFFAAAAAA))),
           const SizedBox(height: 12),
 
           // Ver comprobante
@@ -705,8 +668,7 @@ class _InfoBadge extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: Color(0xFF888888))),
+              style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
           Text(value,
               style: const TextStyle(
                   fontSize: 16,
@@ -716,15 +678,16 @@ class _InfoBadge extends StatelessWidget {
       );
 }
 
-// ─── Fila de historial ───────────────────────────────────────────────────────
+// ─── Fila de historial ────────────────────────────────────────────────────────
+
 class _HistoryRow extends StatelessWidget {
-  final CoinRechargeModel req;
+  final RequestModel req;
   final VoidCallback onViewProof;
   const _HistoryRow({required this.req, required this.onViewProof});
 
   @override
   Widget build(BuildContext context) {
-    final approved = req.status == 'approved';
+    final approved = req.state == 1;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -736,20 +699,15 @@ class _HistoryRow extends StatelessWidget {
         CircleAvatar(
           radius: 18,
           backgroundColor: const Color(0xFFB8860B).withOpacity(0.12),
-          backgroundImage:
-              (req.userImage != null && req.userImage!.isNotEmpty)
-                  ? NetworkImage(req.userImage!)
-                  : null,
-          child: (req.userImage == null || req.userImage!.isEmpty)
-              ? Text(
-                  req.userName?.isNotEmpty == true
-                      ? req.userName![0].toUpperCase()
-                      : 'U',
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFFB8860B),
-                      fontWeight: FontWeight.bold))
-              : null,
+          child: Text(
+            req.userName?.isNotEmpty == true
+                ? req.userName![0].toUpperCase()
+                : 'U',
+            style: const TextStyle(
+                fontSize: 13,
+                color: Color(0xFFB8860B),
+                fontWeight: FontWeight.bold),
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -761,17 +719,18 @@ class _HistoryRow extends StatelessWidget {
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: Color(0xFF2D2D2D))),
-              Text(
-                '${req.resolvedDate != null ? "${req.resolvedDate!.day}/${req.resolvedDate!.month}/${req.resolvedDate!.year}" : "-"}',
-                style: const TextStyle(
-                    fontSize: 11, color: Color(0xFF888888)),
-              ),
+              if (req.processedDate != null)
+                Text(
+                  '${req.processedDate!.day}/${req.processedDate!.month}/${req.processedDate!.year}',
+                  style: const TextStyle(
+                      fontSize: 11, color: Color(0xFF888888)),
+                ),
             ],
           ),
         ),
-        Text('${req.coinsRequested}',
+        Text('${req.value} monedas',
             style: const TextStyle(
-                fontSize: 15,
+                fontSize: 13,
                 fontWeight: FontWeight.bold,
                 color: Color(0xFF2D2D2D))),
         const SizedBox(width: 10),

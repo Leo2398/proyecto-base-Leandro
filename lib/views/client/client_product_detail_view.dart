@@ -6,6 +6,7 @@ import '../../controllers/user_controller.dart';
 import '../../models/report_models.dart';
 import '../../models/user_model.dart';
 import 'client_producer_products_view.dart';
+import '../../core/image_helper.dart';
 
 /// Detalle de un producto más vendido
 /// Muestra info del producto y del productor; permite agregar al carrito
@@ -20,12 +21,7 @@ class ClientProductDetailView extends StatelessWidget {
   static const _text = Color(0xFF2D2D2D);
   static const _textSub = Color(0xFF888888);
 
-  ImageProvider? _imgProvider(String? pic) {
-    if (pic == null || pic.isEmpty) return null;
-    if (pic.startsWith('http')) return NetworkImage(pic);
-    final f = File(pic);
-    return f.existsSync() ? FileImage(f) : null;
-  }
+
 
   void _addToCart(BuildContext context) {
     context.read<CartController>().addFromTopItem(item);
@@ -67,7 +63,7 @@ class ClientProductDetailView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imgProvider = _imgProvider(item.picture);
+
     final precio = item.precio.toStringAsFixed(
         item.precio % 1 == 0 ? 0 : 2);
 
@@ -128,24 +124,15 @@ class ClientProductDetailView extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- Imagen del producto ---
-            Container(
-              width: double.infinity,
-              height: 220,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E8),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: imgProvider != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image(
-                          image: imgProvider, fit: BoxFit.cover),
-                    )
-                  : const Center(
-                      child: Icon(Icons.eco_outlined,
-                          size: 80, color: _green),
-                    ),
-            ),
+            AppImage(
+  src: item.picture,
+  width: double.infinity,
+  height: 220,
+  borderRadius: 20,
+  placeholder: const Center(
+    child: Icon(Icons.eco_outlined, size: 80, color: _green),
+  ),
+),
             const SizedBox(height: 16),
 
             // --- Info del producto ---

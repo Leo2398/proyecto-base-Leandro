@@ -8,6 +8,7 @@ import 'views/producer/producer_dashboard_view.dart';
 import 'controllers/product_controller.dart';
 import 'controllers/cart_controller.dart';
 import 'services/product_service.dart';
+import 'controllers/request_controller.dart';
 void main() {
   runApp(const MyApp());
 }
@@ -24,6 +25,7 @@ class MyApp extends StatelessWidget {
           create: (_) => ProductController(productService: ProductService()),
         ),
         ChangeNotifierProvider(create: (_) => CartController()),
+        ChangeNotifierProvider(create: (_) => RequestController()),
       ],
       child: MaterialApp(
         title: 'Agro App',

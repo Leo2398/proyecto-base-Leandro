@@ -5,6 +5,7 @@ class CartItem {
   final String producerName;
   final double precio;
   final String unidad;
+  final String? picture;
   int quantity;
 
   CartItem({
@@ -13,6 +14,7 @@ class CartItem {
     required this.producerName,
     required this.precio,
     required this.unidad,
+    this.picture,
     this.quantity = 1,
   });
 

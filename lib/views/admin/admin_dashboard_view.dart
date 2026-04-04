@@ -35,7 +35,6 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
   }
 
   Future<void> _loadStats() async {
-    setState(() => _loadingStats = true);
     final clients = await _userService.getUsersByRole(0);
     final companies = await _userService.getUsersByRole(1);
     if (mounted) {
@@ -346,9 +345,17 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
               label: 'Solicitudes de Carga',
               onTap: () {
                 Navigator.pop(context);
+<<<<<<< HEAD
                 Navigator.push(context,
                     MaterialPageRoute(
                         builder: (_) => const AdminCoinRechargeView()));
+=======
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const AdminCoinRechargeView()),
+                );
+>>>>>>> Johnny
               },
             ),
             _DrawerItem(
