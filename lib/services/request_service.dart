@@ -87,6 +87,40 @@ class RequestService {
     }
   }
 
+  /// Obtiene el request pendiente más reciente de un usuario
+  Future<RequestModel?> getLatestPendingRequest(int userID) async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        '''SELECT * FROM Request
+           WHERE userID = :userID AND state = 0
+           ORDER BY registerDate DESC LIMIT 1''',
+        {'userID': userID},
+      );
+      if (result.rows.isEmpty) return null;
+      return RequestModel.fromMap(result.rows.first.assoc());
+    } catch (e) {
+      print('Error en getLatestPendingRequest: $e');
+      return null;
+    }
+  }
+
+  /// Obtiene un request por su ID
+  Future<RequestModel?> getRequestById(int id) async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        'SELECT * FROM Request WHERE ID = :id',
+        {'id': id},
+      );
+      if (result.rows.isEmpty) return null;
+      return RequestModel.fromMap(result.rows.first.assoc());
+    } catch (e) {
+      print('Error en getRequestById: $e');
+      return null;
+    }
+  }
+
   /// Obtiene todos los requests pendientes con datos del usuario (para el admin)
   Future<List<RequestModel>> getAllPendingRequests() async {
     try {
