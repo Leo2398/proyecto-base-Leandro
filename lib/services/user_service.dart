@@ -76,7 +76,7 @@ class UserService implements IUserService {
     }
   }
 
-  /// Obtiene todos los usuarios de un rol específico (incluye inactivos)
+  /// Obtiene todos los usuarios de un rol específico
   Future<List<UserModel>> getUsersByRole(int role) async {
     try {
       final conn = await _db.getConnection();

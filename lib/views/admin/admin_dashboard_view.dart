@@ -4,9 +4,7 @@ import 'package:provider/provider.dart';
 import '../../controllers/user_controller.dart';
 import '../../services/user_service.dart';
 import '../auth/login_view.dart';
-import 'admin_clients_view.dart';
 import 'admin_coin_recharge_view.dart';
-import 'admin_companies_view.dart';
 import 'admin_settings_view.dart';
 import 'admin_users_list_view.dart';
 import 'admin_reports_view.dart';
@@ -326,8 +324,7 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
               label: 'Clientes',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const AdminClientsView()));
+                // TODO: navegar a clientes
               },
             ),
             _DrawerItem(
@@ -335,27 +332,19 @@ class _AdminDashboardViewState extends State<AdminDashboardView> {
               label: 'Empresas',
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(context,
-                    MaterialPageRoute(
-                        builder: (_) => const AdminCompaniesView()));
+                // TODO: navegar a empresas
               },
             ),
             _DrawerItem(
-              icon: Icons.monetization_on_outlined,
+              icon: Icons.upload_outlined,
               label: 'Solicitudes de Carga',
               onTap: () {
                 Navigator.pop(context);
-<<<<<<< HEAD
-                Navigator.push(context,
-                    MaterialPageRoute(
-                        builder: (_) => const AdminCoinRechargeView()));
-=======
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                       builder: (_) => const AdminCoinRechargeView()),
                 );
->>>>>>> Johnny
               },
             ),
             _DrawerItem(
