@@ -96,7 +96,11 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
 
   Future<void> _pickAndSaveQr() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 25,
+        maxWidth: 400,
+        maxHeight: 400);
     if (picked == null) return;
 
     setState(() => _uploadingQr = true);
