@@ -48,6 +48,7 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
   }
 
   Future<void> _load() async {
+    await _service.migrateAppConfig(); // amplía configValue a LONGTEXT si hace falta
     await Future.wait([_loadConfig(), _loadRequests()]);
   }
 

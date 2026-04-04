@@ -8,6 +8,16 @@ class RequestService {
 
   // ── AppConfig ──────────────────────────────────────────────────────────────
 
+  /// Amplía la columna configValue a LONGTEXT si aún es TEXT (una sola vez)
+  Future<void> migrateAppConfig() async {
+    try {
+      final conn = await _db.getConnection();
+      await conn.execute(
+        'ALTER TABLE AppConfig MODIFY COLUMN configValue LONGTEXT',
+      );
+    } catch (_) {} // ignora si ya es LONGTEXT u otro error menor
+  }
+
   /// Obtiene la configuración (bsPerCoin y qrImage) desde la tabla clave-valor
   Future<AppConfigModel> getAppConfig() async {
     try {
