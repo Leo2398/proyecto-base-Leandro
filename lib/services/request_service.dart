@@ -8,38 +8,45 @@ class RequestService {
 
   // ── AppConfig ──────────────────────────────────────────────────────────────
 
-  /// Obtiene la configuración de la app (precio por moneda y QR)
+  /// Obtiene la configuración (bsPerCoin y qrImage) desde la tabla clave-valor
   Future<AppConfigModel> getAppConfig() async {
     try {
       final conn = await _db.getConnection();
-      final result = await conn.execute('SELECT * FROM AppConfig LIMIT 1');
-      if (result.rows.isEmpty) return AppConfigModel.defaults;
-      return AppConfigModel.fromMap(result.rows.first.assoc());
+      final result = await conn.execute(
+        "SELECT configKey, configValue FROM AppConfig WHERE configKey IN ('bsPerCoin','qrImage')",
+      );
+      final rows = result.rows.map((r) => r.assoc()).toList();
+      return AppConfigModel.fromRows(rows);
     } catch (e) {
       print('Error en getAppConfig: $e');
       return AppConfigModel.defaults;
     }
   }
 
-  /// Actualiza precio por moneda y QR (solo admin)
-  Future<bool> updateAppConfig({
-    required double bsPerCoin,
-    String? qrImage,
-  }) async {
+  /// Guarda o actualiza un valor de configuración en AppConfig
+  Future<bool> _setConfig(String key, String value) async {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        '''UPDATE AppConfig SET bsPerCoin = :bsPerCoin,
-           qrImage = :qrImage, updatedAt = NOW()
-           WHERE id = 1''',
-        {'bsPerCoin': bsPerCoin, 'qrImage': qrImage},
+        '''INSERT INTO AppConfig (configKey, configValue)
+           VALUES (:key, :val)
+           ON DUPLICATE KEY UPDATE configValue = VALUES(configValue)''',
+        {'key': key, 'val': value},
       );
       return true;
     } catch (e) {
-      print('Error en updateAppConfig: $e');
+      print('Error en _setConfig($key): $e');
       return false;
     }
   }
+
+  /// Actualiza el precio en Bs por moneda
+  Future<bool> updateBsPerCoin(double bsPerCoin) =>
+      _setConfig('bsPerCoin', bsPerCoin.toStringAsFixed(2));
+
+  /// Actualiza la imagen QR (base64 o URL)
+  Future<bool> updateQrImage(String imageData) =>
+      _setConfig('qrImage', imageData);
 
   // ── Request ────────────────────────────────────────────────────────────────
 
@@ -57,7 +64,6 @@ class RequestService {
           'userID': request.userID,
         },
       );
-      print('✓ Request creado correctamente');
       return true;
     } catch (e) {
       print('Error en createRequest: $e');
@@ -74,78 +80,81 @@ class RequestService {
            ORDER BY registerDate DESC''',
         {'userID': userID},
       );
-      return result.rows
-          .map((r) => RequestModel.fromMap(r.assoc()))
-          .toList();
+      return result.rows.map((r) => RequestModel.fromMap(r.assoc())).toList();
     } catch (e) {
       print('Error en getRequestsByUser: $e');
       return [];
     }
   }
 
-  /// Obtiene el request pendiente más reciente de un usuario (para polling)
-  Future<RequestModel?> getLatestPendingRequest(int userID) async {
-    try {
-      final conn = await _db.getConnection();
-      final result = await conn.execute(
-        '''SELECT * FROM Request
-           WHERE userID = :userID AND state = 0
-           ORDER BY registerDate DESC LIMIT 1''',
-        {'userID': userID},
-      );
-      if (result.rows.isEmpty) return null;
-      return RequestModel.fromMap(result.rows.first.assoc());
-    } catch (e) {
-      print('Error en getLatestPendingRequest: $e');
-      return null;
-    }
-  }
-
-  /// Consulta el estado actual de un request por ID (para polling)
-  Future<RequestModel?> getRequestById(int id) async {
-    try {
-      final conn = await _db.getConnection();
-      final result = await conn.execute(
-        'SELECT * FROM Request WHERE ID = :id',
-        {'id': id},
-      );
-      if (result.rows.isEmpty) return null;
-      return RequestModel.fromMap(result.rows.first.assoc());
-    } catch (e) {
-      print('Error en getRequestById: $e');
-      return null;
-    }
-  }
-
-  /// Obtiene todos los requests pendientes (para el admin)
+  /// Obtiene todos los requests pendientes con datos del usuario (para el admin)
   Future<List<RequestModel>> getAllPendingRequests() async {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
-        '''SELECT * FROM Request WHERE state = 0
-           ORDER BY registerDate ASC''',
+        '''SELECT r.*, u.name AS userName, u.email AS userEmail, u.image AS userImage
+           FROM Request r
+           INNER JOIN User u ON r.userID = u.ID
+           WHERE r.state = 0
+           ORDER BY r.registerDate ASC''',
       );
-      return result.rows
-          .map((r) => RequestModel.fromMap(r.assoc()))
-          .toList();
+      return result.rows.map((r) => RequestModel.fromMap(r.assoc())).toList();
     } catch (e) {
       print('Error en getAllPendingRequests: $e');
       return [];
     }
   }
 
-  /// Aprueba un request: cambia state=1, guarda processedDate y adminID
+  /// Obtiene todos los requests (pendientes + historial) con datos del usuario
+  Future<List<RequestModel>> getAllRequests() async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        '''SELECT r.*, u.name AS userName, u.email AS userEmail, u.image AS userImage
+           FROM Request r
+           INNER JOIN User u ON r.userID = u.ID
+           ORDER BY r.registerDate DESC''',
+      );
+      return result.rows.map((r) => RequestModel.fromMap(r.assoc())).toList();
+    } catch (e) {
+      print('Error en getAllRequests: $e');
+      return [];
+    }
+  }
+
+  /// Aprueba un request: cambia state=1, guarda processedDate, adminID
+  /// y suma las monedas al balance del usuario
   Future<bool> approveRequest({
     required int requestID,
     required int adminID,
   }) async {
     try {
       final conn = await _db.getConnection();
+
+      // Obtener el request para saber cuántas monedas y a qué usuario
+      final res = await conn.execute(
+        'SELECT value, userID FROM Request WHERE ID = :id',
+        {'id': requestID},
+      );
+      if (res.rows.isEmpty) return false;
+
+      final row = res.rows.first.assoc();
+      final coins = int.tryParse(row['value']?.toString() ?? '0') ?? 0;
+      final userID = int.tryParse(row['userID']?.toString() ?? '0') ?? 0;
+
+      // Marcar como aprobado
       await conn.execute(
         '''UPDATE Request SET state = 1, processedDate = NOW(), adminID = :adminID
            WHERE ID = :id''',
         {'adminID': adminID, 'id': requestID},
       );
+
+      // Sumar monedas al balance del usuario
+      await conn.execute(
+        'UPDATE User SET balance = balance + :coins WHERE ID = :userID',
+        {'coins': coins, 'userID': userID},
+      );
+
       return true;
     } catch (e) {
       print('Error en approveRequest: $e');

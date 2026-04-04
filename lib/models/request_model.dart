@@ -10,6 +10,10 @@ class RequestModel {
   final DateTime? processedDate;
   final int userID;
   final int? adminID;
+  // Datos del usuario (disponibles cuando se hace JOIN con User)
+  final String? userName;
+  final String? userEmail;
+  final String? userImage;
 
   const RequestModel({
     this.id,
@@ -21,6 +25,9 @@ class RequestModel {
     this.processedDate,
     required this.userID,
     this.adminID,
+    this.userName,
+    this.userEmail,
+    this.userImage,
   });
 
   factory RequestModel.fromMap(Map<String, dynamic> map) {
@@ -34,6 +41,9 @@ class RequestModel {
       processedDate: _toDateTime(map['processedDate']),
       userID: _toInt(map['userID']) ?? 0,
       adminID: _toInt(map['adminID']),
+      userName: map['userName']?.toString(),
+      userEmail: map['userEmail']?.toString(),
+      userImage: map['userImage']?.toString(),
     );
   }
 
