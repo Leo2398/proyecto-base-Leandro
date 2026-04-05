@@ -205,31 +205,49 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
     }
     showDialog(
       context: context,
-      builder: (_) => Dialog(
+      builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Comprobante de pago',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-            ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(16)),
-              child: AppImage(
-                src: image,
-                width: double.infinity,
-                fit: BoxFit.contain,
-                placeholder: const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Icon(Icons.broken_image_outlined,
-                      size: 48, color: Colors.grey),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+                child: Row(children: [
+                  const Expanded(
+                    child: Text('Comprobante de pago',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ]),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AppImage(
+                    src: image,
+                    width: double.infinity,
+                    height: 420,
+                    fit: BoxFit.contain,
+                    placeholder: const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Icon(Icons.broken_image_outlined,
+                          size: 48, color: Colors.grey),
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

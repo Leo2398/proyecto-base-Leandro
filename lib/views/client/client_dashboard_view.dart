@@ -4,11 +4,12 @@ import '../../controllers/cart_controller.dart';
 import '../../controllers/user_controller.dart';
 import '../auth/login_view.dart';
 import 'client_best_sellers_view.dart';
-import 'client_coin_recharge_view.dart';
+import 'client_cart_view.dart';
 import 'client_producer_products_view.dart';
 import 'client_settings_view.dart';
+import 'client_reload_view.dart';
+
 /// Dashboard principal del cliente
-/// Principio S de SOLID: solo maneja la UI del dashboard del cliente
 class ClientDashboardView extends StatefulWidget {
   const ClientDashboardView({super.key});
 
@@ -25,6 +26,111 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
     });
   }
 
+  void _openCart() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ClientCartView()),
+    );
+  }
+
+  void _showDifferentProducerWarning(String currentProducer) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE0D8CE),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF0EC),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(
+                Icons.storefront_outlined,
+                color: Color(0xFFD96C2F),
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Solo una empresa por pedido',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2D2D2D),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tu carrito ya tiene productos de "$currentProducer". '
+              'Vacía el carrito para agregar productos de otra empresa.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Color(0xFF888888),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF5A8A5A),
+                      side: const BorderSide(color: Color(0xFF5A8A5A)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Cancelar',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      context.read<CartController>().clearCart();
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD96C2F),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Vaciar carrito',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -32,7 +138,6 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            /// AppBar personalizado
             SliverAppBar(
               backgroundColor: const Color(0xFFF5F0E8),
               floating: true,
@@ -40,7 +145,6 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
               automaticallyImplyLeading: false,
               title: Row(
                 children: [
-                  /// Logo
                   Container(
                     width: 36,
                     height: 36,
@@ -66,128 +170,141 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
                 ],
               ),
               actions: [
-  /// Balance del usuario
-  Consumer<UserController>(
-    builder: (context, controller, child) {
-      return Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 6,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 5,
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.monetization_on_outlined,
-              color: Color(0xFFB8860B),
-              size: 18,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '${controller.currentUser?.balance.toStringAsFixed(0) ?? '0'}',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2D2D2D),
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  ),
-  const SizedBox(width: 4),
+                // ── Balance (tappable → recarga de monedas) ──────────────
+                Consumer<UserController>(
+                  builder: (context, controller, _) {
+                    return GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ClientReloadView()),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 5,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.monetization_on_outlined,
+                              color: Color(0xFFB8860B),
+                              size: 18,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${controller.currentUser?.balance.toStringAsFixed(0) ?? '0'}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF2D2D2D),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.add_circle_outline_rounded,
+                              color: Color(0xFF5A8A5A),
+                              size: 14,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
 
-  /// Carrito de compras con badge
-  Consumer<CartController>(
-    builder: (_, cart, __) => Stack(
-      children: [
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(
-            Icons.shopping_cart_outlined,
-            color: Color(0xFF2D2D2D),
-          ),
-        ),
-        if (cart.itemCount > 0)
-          Positioned(
-            right: 6,
-            top: 6,
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: const BoxDecoration(
-                color: Color(0xFF5A8A5A),
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                '${cart.itemCount}',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold),
-              ),
+                const SizedBox(width: 4),
+
+                // ── Carrito con badge ────────────────────────────────────
+                Consumer<CartController>(
+                  builder: (_, cart, __) => Stack(
+                    children: [
+                      IconButton(
+                        onPressed: _openCart,
+                        icon: const Icon(
+                          Icons.shopping_cart_outlined,
+                          color: Color(0xFF2D2D2D),
+                        ),
+                      ),
+                      if (cart.itemCount > 0)
+                        Positioned(
+                          right: 6,
+                          top: 6,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF5A8A5A),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${cart.itemCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // ── Configuración ────────────────────────────────────────
+                IconButton(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ClientSettingsView()),
+                  ),
+                  icon: const Icon(
+                    Icons.settings_outlined,
+                    color: Color(0xFF2D2D2D),
+                  ),
+                ),
+
+                // ── Cerrar sesión ────────────────────────────────────────
+                IconButton(
+                  onPressed: () async {
+                    final controller = Provider.of<UserController>(
+                        context,
+                        listen: false);
+                    await controller.logout();
+                    if (context.mounted) {
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const LoginView()),
+                        (route) => false,
+                      );
+                    }
+                  },
+                  icon: const Icon(
+                    Icons.logout,
+                    color: Color(0xFF2D2D2D),
+                  ),
+                ),
+
+                const SizedBox(width: 4),
+              ],
             ),
-          ),
-      ],
-    ),
-  ),
 
-  /// Botón de configuración
-  IconButton(
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ClientSettingsView(),
-      ),
-    );
-  },
-  icon: const Icon(
-    Icons.settings_outlined,
-    color: Color(0xFF2D2D2D),
-  ),
-),
-
-  /// Botón de cerrar sesión
-  IconButton(
-    onPressed: () async {
-      final controller = Provider.of<UserController>(context, listen: false);
-      await controller.logout();
-      if (context.mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginView()),
-          (route) => false,
-        );
-      }
-    },
-    icon: const Icon(
-      Icons.logout,
-      color: Color(0xFF2D2D2D),
-    ),
-  ),
-
-  const SizedBox(width: 4),
-],
-            ),
-
-            /// Contenido principal
+            // ── Contenido principal ──────────────────────────────────────
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   const SizedBox(height: 16),
 
-                  /// Sección productos más vendidos
+                  // Productos más vendidos
                   const Text(
                     'Productos más vendidos',
                     style: TextStyle(
@@ -196,17 +313,15 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
                       color: Color(0xFF2D2D2D),
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
-                  /// Lista horizontal de productos (toca para ver más vendidos)
                   SizedBox(
                     height: 180,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
                         GestureDetector(
-                          onTap: () => Navigator.push(context,
+                          onTap: () => Navigator.push(
+                              context,
                               MaterialPageRoute(
                                   builder: (_) =>
                                       const ClientBestSellersView())),
@@ -220,7 +335,8 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
                         ),
                         const SizedBox(width: 12),
                         GestureDetector(
-                          onTap: () => Navigator.push(context,
+                          onTap: () => Navigator.push(
+                              context,
                               MaterialPageRoute(
                                   builder: (_) =>
                                       const ClientBestSellersView())),
@@ -234,7 +350,8 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
                         ),
                         const SizedBox(width: 12),
                         GestureDetector(
-                          onTap: () => Navigator.push(context,
+                          onTap: () => Navigator.push(
+                              context,
                               MaterialPageRoute(
                                   builder: (_) =>
                                       const ClientBestSellersView())),
@@ -252,7 +369,7 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
 
                   const SizedBox(height: 24),
 
-                  /// Sección empresas agrícolas
+                  // Empresas agrícolas
                   const Text(
                     'Empresas agrícolas',
                     style: TextStyle(
@@ -261,19 +378,17 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
                       color: Color(0xFF2D2D2D),
                     ),
                   ),
-
                   const SizedBox(height: 12),
 
-                  /// Lista de productores
                   Consumer<UserController>(
                     builder: (context, controller, child) {
-                      if (controller.isLoading && controller.producers.isEmpty) {
+                      if (controller.isLoading &&
+                          controller.producers.isEmpty) {
                         return const Center(
                           child: Padding(
                             padding: EdgeInsets.symmetric(vertical: 24),
                             child: CircularProgressIndicator(
-                              color: Color(0xFF5A8A5A),
-                            ),
+                                color: Color(0xFF5A8A5A)),
                           ),
                         );
                       }
@@ -285,46 +400,38 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
                           ),
                           child: const Text(
                             'No hay productores disponibles.',
                             style: TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF888888),
-                            ),
+                                fontSize: 14, color: Color(0xFF888888)),
                           ),
                         );
                       }
 
                       return Column(
-                        children: [
-                          ...controller.producers.map((producer) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _ProducerCard(
-                                name: producer.name,
-                                description: producer.description?.isNotEmpty == true
-                                    ? producer.description!
-                                    : 'Productor agrícola disponible en AgroMarket.',
-                                onViewProducts: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ClientProducerProductsView(producer: producer),
-                                    ),
-                                  );
-                                },
-                              ),
-                            );
-                          }),
-                        ],
+                        children: controller.producers.map((producer) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _ProducerCard(
+                              name: producer.name,
+                              description:
+                                  producer.description?.isNotEmpty == true
+                                      ? producer.description!
+                                      : 'Productor agrícola disponible en AgroMarket.',
+                              onViewProducts: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ClientProducerProductsView(
+                                            producer: producer),
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }).toList(),
                       );
                     },
                   ),
@@ -337,7 +444,7 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
         ),
       ),
 
-      /// Bottom navigation bar
+      // ── Bottom navigation bar ──────────────────────────────────────────
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF5A8A5A),
@@ -346,49 +453,34 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Inicio',
-          ),
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home),
+              label: 'Inicio'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.search_outlined),
-            activeIcon: Icon(Icons.search),
-            label: 'Buscar',
-          ),
+              icon: Icon(Icons.search_outlined),
+              activeIcon: Icon(Icons.search),
+              label: 'Buscar'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.trending_up_outlined),
-            activeIcon: Icon(Icons.trending_up),
-            label: 'Más vendidos',
-          ),
+              icon: Icon(Icons.trending_up_outlined),
+              activeIcon: Icon(Icons.trending_up),
+              label: 'Más vendidos'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.monetization_on_outlined),
-            activeIcon: Icon(Icons.monetization_on),
-            label: 'Recargar',
-          ),
+              icon: Icon(Icons.shopping_cart_outlined),
+              activeIcon: Icon(Icons.shopping_cart),
+              label: 'Pedidos'),
           BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart_outlined),
-            activeIcon: Icon(Icons.shopping_cart),
-            label: 'Pedidos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outlined),
-            activeIcon: Icon(Icons.person),
-            label: 'Perfil',
-          ),
+              icon: Icon(Icons.person_outlined),
+              activeIcon: Icon(Icons.person),
+              label: 'Perfil'),
         ],
         onTap: (index) {
           if (index == 2) {
             Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const ClientBestSellersView()),
-            );
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ClientBestSellersView()));
           } else if (index == 3) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => const ClientCoinRechargeView()),
-            );
+            _openCart();
           }
         },
       ),
@@ -396,8 +488,8 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
   }
 }
 
-/// Widget de tarjeta de producto
-/// Principio S de SOLID: widget con responsabilidad única
+// ── _ProductCard ───────────────────────────────────────────────────────────────
+
 class _ProductCard extends StatelessWidget {
   final String name;
   final String producer;
@@ -431,7 +523,6 @@ class _ProductCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// Imagen del producto
           Container(
             height: 90,
             decoration: BoxDecoration(
@@ -442,15 +533,10 @@ class _ProductCard extends StatelessWidget {
               ),
             ),
             child: const Center(
-              child: Icon(
-                Icons.eco_outlined,
-                size: 40,
-                color: Color(0xFF5A8A5A),
-              ),
+              child: Icon(Icons.eco_outlined,
+                  size: 40, color: Color(0xFF5A8A5A)),
             ),
           ),
-
-          /// Info del producto
           Padding(
             padding: const EdgeInsets.all(8),
             child: Column(
@@ -469,47 +555,29 @@ class _ProductCard extends StatelessWidget {
                 Text(
                   producer,
                   style: const TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFF888888),
-                  ),
+                      fontSize: 11, color: Color(0xFF888888)),
                 ),
                 const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.star,
-                          size: 12,
-                          color: Color(0xFFB8860B),
-                        ),
-                        Text(
-                          '$rating',
+                    Row(children: [
+                      const Icon(Icons.star,
+                          size: 12, color: Color(0xFFB8860B)),
+                      Text('$rating',
                           style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF888888),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.monetization_on_outlined,
-                          size: 12,
-                          color: Color(0xFFB8860B),
-                        ),
-                        Text(
-                          price,
+                              fontSize: 11, color: Color(0xFF888888))),
+                    ]),
+                    Row(children: [
+                      const Icon(Icons.monetization_on_outlined,
+                          size: 12, color: Color(0xFFB8860B)),
+                      Text(price,
                           style: const TextStyle(
                             fontSize: 11,
                             color: Color(0xFF2D2D2D),
                             fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
+                          )),
+                    ]),
                   ],
                 ),
               ],
@@ -521,8 +589,8 @@ class _ProductCard extends StatelessWidget {
   }
 }
 
-/// Widget de tarjeta de productor
-/// Principio S de SOLID: widget con responsabilidad única
+// ── _ProducerCard ──────────────────────────────────────────────────────────────
+
 class _ProducerCard extends StatelessWidget {
   final String name;
   final String description;
@@ -563,10 +631,8 @@ class _ProducerCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             description,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF888888),
-            ),
+            style:
+                const TextStyle(fontSize: 13, color: Color(0xFF888888)),
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
           ),
@@ -578,19 +644,13 @@ class _ProducerCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF5A8A5A),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                    borderRadius: BorderRadius.circular(8)),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                    horizontal: 16, vertical: 8),
               ),
               child: const Text(
                 'Ver productos',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.white,
-                ),
+                style: TextStyle(fontSize: 13, color: Colors.white),
               ),
             ),
           ),
