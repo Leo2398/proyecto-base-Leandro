@@ -52,6 +52,57 @@ class LocationService implements ILocationService {
     }
   }
 
+  Future<bool> updateLocation({
+    required int locationId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final conn = await _db.getConnection();
+      await conn.execute(
+        '''
+      UPDATE Location
+      SET Latitude = :latitude,
+          Longitude = :longitude
+      WHERE ID = :locationId
+      ''',
+        {
+          'locationId': locationId,
+          'latitude': latitude,
+          'longitude': longitude,
+        },
+      );
+      return true;
+    } catch (e) {
+      print('Error en updateLocation: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updatePickupLocation({
+    required int locationId,
+    required String address,
+  }) async {
+    try {
+      final conn = await _db.getConnection();
+      await conn.execute(
+        '''
+      UPDATE PickupLocation
+      SET address = :address
+      WHERE LocationID = :locationId
+      ''',
+        {
+          'locationId': locationId,
+          'address': address,
+        },
+      );
+      return true;
+    } catch (e) {
+      print('Error en updatePickupLocation: $e');
+      return false;
+    }
+  }
+
   /// Obtiene un punto de recogida por su ID incluyendo coordenadas
   @override
   Future<PickupLocationModel?> getPickupLocationById(int id) async {

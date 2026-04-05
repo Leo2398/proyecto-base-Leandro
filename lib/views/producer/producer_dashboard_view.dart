@@ -87,11 +87,13 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       final bDate = b.harvestDate ?? DateTime(2000);
       return bDate.compareTo(aDate);
     });
-    return copy.take(4).toList();
+    return copy.take(6).toList();
   }
 
   List<ProductModel> _lowStockProducts(List<ProductModel> products) {
-    return products.where((p) => p.state == 1 && p.stock > 0 && p.stock <= 3).toList();
+    return products
+        .where((p) => p.state == 1 && p.stock > 0 && p.stock <= 3)
+        .toList();
   }
 
   List<ProductModel> _soldOutProducts(List<ProductModel> products) {
@@ -208,29 +210,38 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   }
 
   EdgeInsets _pagePadding(double width) {
-    if (width >= 1000) {
-      return const EdgeInsets.fromLTRB(24, 18, 24, 180);
+    if (width >= 1200) {
+      return const EdgeInsets.fromLTRB(28, 16, 28, 170);
     }
-    return const EdgeInsets.fromLTRB(16, 14, 16, 180);
+    if (width >= 800) {
+      return const EdgeInsets.fromLTRB(20, 14, 20, 170);
+    }
+    return const EdgeInsets.fromLTRB(16, 12, 16, 170);
   }
 
   double _maxWidth(double width) {
-    if (width >= 1500) return 1320;
-    if (width >= 1200) return 1100;
-    if (width >= 1000) return 920;
+    if (width >= 1600) return 1380;
+    if (width >= 1300) return 1180;
+    if (width >= 1000) return 980;
     return width;
   }
 
-  int _summaryCrossAxisCount(double width) {
-    if (width >= 1000) return 4;
-    if (width >= 700) return 2;
+  int _quickActionsCrossAxisCount(double width) {
+    if (width >= 1200) return 4;
+    if (width >= 700) return 4;
     return 2;
   }
 
-  int _quickActionsCrossAxisCount(double width) {
-    if (width >= 1100) return 4;
-    if (width >= 700) return 2;
+  int _metricCrossAxisCount(double width) {
+    if (width >= 1200) return 4;
+    if (width >= 850) return 2;
     return 2;
+  }
+
+  int _productGridCount(double width) {
+    if (width >= 1300) return 3;
+    if (width >= 850) return 2;
+    return 1;
   }
 
   Future<void> _goToProducts() async {
@@ -359,39 +370,29 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 700;
-    final isVerySmall = screenWidth < 360;
+    final isDesktop = screenWidth >= 1000;
 
     final products = productController.products;
-    final recentProducts = _recentProducts(products).take(isMobile ? 3 : 4).toList();
+    final recentProducts =
+    _recentProducts(products).take(isMobile ? 4 : 6).toList();
     final lowStockProducts = _lowStockProducts(products);
     final soldOutProducts = _soldOutProducts(products);
 
-    final coinBalance = _dashboardCoinBalance(userController, coinController);
-    final moneyReference = _dashboardMoneyReference(userController, coinController);
+    final coinBalance =
+    _dashboardCoinBalance(userController, coinController);
+    final moneyReference =
+    _dashboardMoneyReference(userController, coinController);
 
-    final isLoading = productController.isLoading || coinController.isLoading;
-    final isInitialLoading = isLoading && products.isEmpty && _lastSyncedAt == null;
+    final isLoading =
+        productController.isLoading || coinController.isLoading || _isRefreshing;
+    final isInitialLoading =
+        isLoading && products.isEmpty && _lastSyncedAt == null;
 
     return Scaffold(
       extendBody: true,
       backgroundColor: const Color(0xFFF6EFE6),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: FloatingActionButton.extended(
-          backgroundColor: _primary,
-          elevation: 12,
-          onPressed: _goToCreateProduct,
-          icon: const Icon(Icons.add_rounded, color: Colors.white),
-          label: const Text(
-            'Publicar',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ),
+      floatingActionButton: _buildFloatingPublishButton(isMobile),
       bottomNavigationBar: _buildBottomNavigationBar(),
       body: Container(
         decoration: const BoxDecoration(
@@ -405,35 +406,23 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           children: [
             Positioned(
               top: -80,
-              left: -60,
-              child: _buildBackgroundBubble(
-                190,
-                _primary.withOpacity(0.12),
-              ),
+              left: -50,
+              child: _buildDecorBubble(180, _primary.withOpacity(0.11)),
             ),
             Positioned(
-              top: 150,
-              right: -65,
-              child: _buildBackgroundBubble(
-                150,
-                _green.withOpacity(0.08),
-              ),
+              top: 120,
+              right: -55,
+              child: _buildDecorBubble(170, _gold.withOpacity(0.13)),
             ),
             Positioned(
-              bottom: -70,
-              left: -25,
-              child: _buildBackgroundBubble(
-                170,
-                _primaryDark.withOpacity(0.06),
-              ),
+              bottom: 140,
+              left: -65,
+              child: _buildDecorBubble(180, _green.withOpacity(0.07)),
             ),
             Positioned(
-              bottom: 210,
-              right: -25,
-              child: _buildBackgroundBubble(
-                95,
-                _gold.withOpacity(0.10),
-              ),
+              bottom: -50,
+              right: -20,
+              child: _buildDecorBubble(130, _primaryDark.withOpacity(0.06)),
             ),
             SafeArea(
               child: RefreshIndicator(
@@ -455,116 +444,46 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildTopBar(
+                              _buildTopHeader(
                                 userController: userController,
-                                coinBalance: coinBalance,
-                                isLoading: isLoading || _isRefreshing,
-                                screenWidth: screenWidth,
                                 products: products,
+                                coinBalance: coinBalance,
+                                isLoading: isLoading,
+                                isMobile: isMobile,
                               ),
                               const SizedBox(height: 18),
                               if (isInitialLoading)
                                 _buildLoadingCard()
                               else ...[
-                                _buildHeroCard(
+                                _buildStoreHero(
                                   userController: userController,
                                   products: products,
                                   coinBalance: coinBalance,
                                   moneyReference: moneyReference,
-                                  isLoading: isLoading || _isRefreshing,
+                                  isLoading: isLoading,
                                   isMobile: isMobile,
-                                  isVerySmall: isVerySmall,
                                 ),
                                 const SizedBox(height: 18),
-                                _buildSectionContainer(
-                                  title: 'Resumen operativo',
-                                  subtitle: 'Vista rápida del estado real de tu catálogo.',
-                                  child: Column(
-                                    children: [
-                                      _buildSummaryGrid(
-                                        screenWidth: screenWidth,
-                                        items: [
-                                          _SummaryCardData(
-                                            icon: Icons.inventory_2_outlined,
-                                            title: 'Productos',
-                                            value: products.length.toString(),
-                                            accent: _primary,
-                                          ),
-                                          _SummaryCardData(
-                                            icon: Icons.check_circle_outline,
-                                            title: 'Activos',
-                                            value: _activeProducts(products).toString(),
-                                            accent: _green,
-                                          ),
-                                          _SummaryCardData(
-                                            icon: Icons.grid_view_rounded,
-                                            title: 'Unidades',
-                                            value: _totalUnits(products).toString(),
-                                            accent: _primaryDark,
-                                          ),
-                                          _SummaryCardData(
-                                            icon: Icons.payments_outlined,
-                                            title: 'Promedio',
-                                            value: '${_money(_averagePrice(products))} mon.',
-                                            accent: _orange,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 14),
-                                      _buildStatusBanner(
-                                        label: 'Estado general',
-                                        value: _stockHealthLabel(products),
-                                        color: _stockHealthColor(products),
-                                      ),
-                                      const SizedBox(height: 14),
-                                      _buildAvailabilityCard(
-                                        availability: _availabilityPercent(products),
-                                        active: _activeProducts(products),
-                                        total: products.length,
-                                        moneyReference: moneyReference,
-                                      ),
-                                    ],
-                                  ),
+                                _buildWalletSection(
+                                  coinBalance: coinBalance,
+                                  moneyReference: moneyReference,
+                                  products: products,
+                                  isDesktop: isDesktop,
                                 ),
                                 const SizedBox(height: 18),
-                                _buildSectionContainer(
-                                  title: 'Alertas del catálogo',
-                                  subtitle: 'Solo muestra información real según el stock actual.',
-                                  actionLabel: lowStockProducts.isNotEmpty || soldOutProducts.isNotEmpty
-                                      ? 'Ver catálogo'
-                                      : null,
-                                  onActionTap: lowStockProducts.isNotEmpty || soldOutProducts.isNotEmpty
-                                      ? _goToProducts
-                                      : null,
-                                  child: _buildAlertsContent(
-                                    lowStockProducts: lowStockProducts,
-                                    soldOutProducts: soldOutProducts,
-                                  ),
+                                _buildQuickActionsSection(screenWidth),
+                                const SizedBox(height: 18),
+                                _buildResponsiveMiddleSection(
+                                  screenWidth: screenWidth,
+                                  products: products,
+                                  moneyReference: moneyReference,
+                                  lowStockProducts: lowStockProducts,
+                                  soldOutProducts: soldOutProducts,
                                 ),
                                 const SizedBox(height: 18),
-                                _buildSectionContainer(
-                                  title: 'Accesos rápidos',
-                                  subtitle: 'Entradas directas a las acciones que más usas.',
-                                  child: _buildQuickActionsGrid(
-                                    screenWidth: screenWidth,
-                                  ),
-                                ),
-                                const SizedBox(height: 18),
-                                _buildSectionContainer(
-                                  title: 'Productos recientes',
-                                  subtitle: 'Tus publicaciones más actuales con datos reales.',
-                                  actionLabel: 'Ver productos',
-                                  onActionTap: _goToProducts,
-                                  child: recentProducts.isEmpty
-                                      ? _buildEmptyCard(
-                                    icon: Icons.inventory_2_outlined,
-                                    title: 'Aún no tienes productos publicados',
-                                    subtitle:
-                                    'Cuando publiques productos, aquí aparecerán tus registros más recientes.',
-                                  )
-                                      : Column(
-                                    children: recentProducts.map(_buildRecentProductCard).toList(),
-                                  ),
+                                _buildRecentProductsSection(
+                                  screenWidth: screenWidth,
+                                  recentProducts: recentProducts,
                                 ),
                               ],
                             ],
@@ -582,36 +501,66 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildBackgroundBubble(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
+  Widget _buildFloatingPublishButton(bool isMobile) {
+    if (isMobile) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: FloatingActionButton(
+          backgroundColor: _primary,
+          elevation: 10,
+          onPressed: _goToCreateProduct,
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: FloatingActionButton.extended(
+        backgroundColor: _primary,
+        elevation: 10,
+        onPressed: _goToCreateProduct,
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        label: const Text(
+          'Publicar',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildTopBar({
+  Widget _buildDecorBubble(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+      ),
+    );
+  }
+
+  Widget _buildTopHeader({
     required UserController userController,
+    required List<ProductModel> products,
     required double coinBalance,
     required bool isLoading,
-    required double screenWidth,
-    required List<ProductModel> products,
+    required bool isMobile,
   }) {
     final user = userController.currentUser;
-    final hasName = (user?.name.isNotEmpty ?? false);
-    final initial = hasName ? user!.name[0].toUpperCase() : 'P';
-    final isMobile = screenWidth < 700;
-    final statusColor = _stockHealthColor(products);
-    final statusText = _stockHealthLabel(products);
+    final name = user?.name ?? 'Productor';
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'P';
+    final stockColor = _stockHealthColor(products);
+    final stockText = _stockHealthLabel(products);
 
-    final titleArea = Row(
+    final left = Row(
       children: [
         Container(
-          width: 60,
-          height: 60,
+          width: 58,
+          height: 58,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
             gradient: const LinearGradient(
@@ -622,36 +571,20 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             boxShadow: [
               BoxShadow(
                 color: _primary.withOpacity(0.28),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
-          child: Stack(
-            children: [
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFFFF0C5),
-                    shape: BoxShape.circle,
-                  ),
-                ),
+          child: Center(
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
               ),
-              Center(
-                child: Text(
-                  initial,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -659,46 +592,50 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildHeaderChip(
-                    icon: Icons.dashboard_customize_outlined,
-                    label: 'Dashboard',
-                    color: _primaryDark,
-                    background: const Color(0xFFFFF7EC),
-                  ),
-                  _buildHeaderChip(
-                    icon: Icons.verified_outlined,
-                    label: 'Datos reales',
-                    color: _green,
-                    background: const Color(0xFFF2FAF5),
-                  ),
-                ],
+              const Text(
+                'Mi tienda',
+                style: TextStyle(
+                  color: _textSoft,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 2),
               Text(
-                userController.currentUser?.name ?? 'Productor',
+                name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 24,
                   color: _textDark,
+                  fontSize: 24,
                   fontWeight: FontWeight.w800,
-                  height: 1.05,
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                _lastSyncedAt == null
-                    ? 'Sincronización pendiente'
-                    : 'Actualizado ${_formatHour(_lastSyncedAt)} · ${_formatDate(_lastSyncedAt)}',
-                style: TextStyle(
-                  fontSize: 11.8,
-                  color: isLoading ? _primaryDark : _textSoft,
-                  fontWeight: FontWeight.w600,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: stockColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      stockText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: stockColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -706,53 +643,18 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       ],
     );
 
-    final actions = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final right = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: isMobile ? WrapAlignment.start : WrapAlignment.end,
       children: [
-        Wrap(
-          alignment: isMobile ? WrapAlignment.start : WrapAlignment.end,
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            _buildBalancePill(
-              isLoading: isLoading,
-              value: '${_coins(coinBalance)} mon.',
-            ),
-            _buildTopIconButton(
-              icon: Icons.refresh_rounded,
-              color: _primary,
-              onTap: _loadDashboardData,
-            ),
-            _buildMenuButton(),
-          ],
+        _buildCoinChip('${_coins(coinBalance)} mon.'),
+        _buildHeaderIconButton(
+          icon: Icons.refresh_rounded,
+          color: _primary,
+          onTap: _loadDashboardData,
         ),
-        const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: statusColor.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: statusColor.withOpacity(0.18)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.insights_outlined, color: statusColor, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  statusText,
-                  style: TextStyle(
-                    color: statusColor,
-                    fontSize: 12.2,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        _buildMenuButton(),
       ],
     );
 
@@ -760,73 +662,64 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          titleArea,
-          const SizedBox(height: 14),
-          actions,
+          left,
+          const SizedBox(height: 12),
+          right,
+          const SizedBox(height: 8),
+          Text(
+            _lastSyncedAt == null
+                ? 'Sincronización pendiente'
+                : 'Actualizado ${_formatHour(_lastSyncedAt)} · ${_formatDate(_lastSyncedAt)}${isLoading ? ' · actualizando' : ''}',
+            style: const TextStyle(
+              color: _textSoft,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       );
     }
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: [
-        Expanded(child: titleArea),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 280,
-          child: actions,
+        Row(
+          children: [
+            Expanded(child: left),
+            const SizedBox(width: 12),
+            right,
+          ],
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _lastSyncedAt == null
+                ? 'Sincronización pendiente'
+                : 'Actualizado ${_formatHour(_lastSyncedAt)} · ${_formatDate(_lastSyncedAt)}${isLoading ? ' · actualizando' : ''}',
+            style: const TextStyle(
+              color: _textSoft,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildHeaderChip({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required Color background,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.12)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 14),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBalancePill({
-    required bool isLoading,
-    required String value,
-  }) {
+  Widget _buildCoinChip(String value) {
     return InkWell(
       onTap: _goToCoins,
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(24),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          color: _surface.withOpacity(0.98),
-          borderRadius: BorderRadius.circular(22),
+          color: _surface.withOpacity(0.96),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(color: _border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.035),
+              color: Colors.black.withOpacity(0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -835,18 +728,18 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              isLoading ? Icons.hourglass_top_rounded : Icons.monetization_on_outlined,
-              color: _primary,
+            const Icon(
+              Icons.monetization_on_outlined,
               size: 18,
+              color: _primary,
             ),
             const SizedBox(width: 6),
             Text(
               value,
               style: const TextStyle(
                 color: _textDark,
-                fontWeight: FontWeight.w800,
                 fontSize: 12.5,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -855,7 +748,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildTopIconButton({
+  Widget _buildHeaderIconButton({
     required IconData icon,
     required Color color,
     required Future<void> Function() onTap,
@@ -867,7 +760,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         width: 46,
         height: 46,
         decoration: BoxDecoration(
-          color: _surface.withOpacity(0.98),
+          color: _surface.withOpacity(0.96),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(color: _border),
         ),
@@ -925,13 +818,6 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         color: _surface.withOpacity(0.97),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: _border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
       child: const Column(
         children: [
@@ -960,373 +846,241 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildHeroCard({
+  Widget _buildStoreHero({
     required UserController userController,
     required List<ProductModel> products,
     required double coinBalance,
     required double moneyReference,
     required bool isLoading,
     required bool isMobile,
-    required bool isVerySmall,
   }) {
     final userName = userController.currentUser?.name ?? 'Productor';
-    final stockValue = _inventoryValue(products);
+    final stockText = _stockHealthLabel(products);
+    final stockColor = _stockHealthColor(products);
 
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
         gradient: const LinearGradient(
           colors: [
-            Color(0xFF5B4A42),
-            Color(0xFF433933),
-            Color(0xFF2C2725),
+            Color(0xFF5A4A41),
+            Color(0xFF443832),
+            Color(0xFF302826),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
+            color: Colors.black.withOpacity(0.16),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            top: -40,
-            right: -10,
-            child: Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.06),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -40,
-            left: -22,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.04),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 28,
-            right: 24,
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.store_mall_directory_outlined,
-                color: Colors.white70,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildHeroTag(
-                      icon: Icons.verified_outlined,
-                      text: 'Datos reales',
-                    ),
-                    _buildHeroTag(
-                      icon: Icons.sync_rounded,
-                      text: isLoading ? 'Actualizando' : 'Sincronizado',
-                    ),
-                    _buildHeroTag(
-                      icon: Icons.storefront_outlined,
-                      text: '${products.length} productos',
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                Text(
-                  'Hola, $userName',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 29,
-                    height: 1.02,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Un panel más limpio, más visual y mucho más cómodo para usar en móvil.',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.78),
-                    fontSize: 13,
-                    height: 1.45,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildHeroTopMetric(
-                          icon: Icons.savings_outlined,
-                          title: 'Inventario',
-                          value: '${_money(stockValue)} mon.',
-                        ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 36,
-                        color: Colors.white.withOpacity(0.10),
-                      ),
-                      Expanded(
-                        child: _buildHeroTopMetric(
-                          icon: Icons.account_balance_wallet_outlined,
-                          title: 'Saldo',
-                          value: '${_coins(coinBalance)} mon.',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  childAspectRatio: isMobile ? 1.45 : 1.7,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildHeroStat(
-                      label: 'Activos',
-                      value: _activeProducts(products).toString(),
-                    ),
-                    _buildHeroStat(
-                      label: 'Pausados',
-                      value: _pausedProducts(products).toString(),
-                    ),
-                    _buildHeroStat(
-                      label: 'Stock bajo',
-                      value: _lowStockProducts(products).length.toString(),
-                    ),
-                    _buildHeroStat(
-                      label: 'Agotados',
-                      value: _soldOutProducts(products).length.toString(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.09),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.08),
-                    ),
-                  ),
-                  child: isVerySmall
-                      ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeroBottomInfo(
-                        title: 'Referencia',
-                        value: _money(moneyReference),
-                      ),
-                      const SizedBox(height: 10),
-                      _buildHeroBottomInfo(
-                        title: 'Disponibilidad',
-                        value: '${(_availabilityPercent(products) * 100).round()}%',
-                      ),
-                      const SizedBox(height: 10),
-                      _buildHeroBottomInfo(
-                        title: 'Última carga',
-                        value: _formatHour(_lastSyncedAt),
-                      ),
-                    ],
-                  )
-                      : Row(
-                    children: [
-                      Expanded(
-                        child: _buildHeroBottomInfo(
-                          title: 'Referencia',
-                          value: _money(moneyReference),
-                        ),
-                      ),
-                      Expanded(
-                        child: _buildHeroBottomInfo(
-                          title: 'Disponibilidad',
-                          value: '${(_availabilityPercent(products) * 100).round()}%',
-                        ),
-                      ),
-                      Expanded(
-                        child: _buildHeroBottomInfo(
-                          title: 'Última carga',
-                          value: _formatHour(_lastSyncedAt),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (isVerySmall)
-                  Column(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _goToProducts,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          icon: const Icon(Icons.storefront_rounded, size: 18),
-                          label: const Text('Ver catálogo'),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: _goToCoins,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: _textDark,
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          icon: const Icon(
-                            Icons.account_balance_wallet_rounded,
-                            size: 18,
-                          ),
-                          label: const Text('Ir a monedas'),
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _goToProducts,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: _primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          icon: const Icon(Icons.storefront_rounded, size: 18),
-                          label: const Text('Ver catálogo'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _goToCoins,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: _textDark,
-                            padding: const EdgeInsets.symmetric(vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          icon: const Icon(
-                            Icons.account_balance_wallet_rounded,
-                            size: 18,
-                          ),
-                          label: const Text('Ir a monedas'),
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeroTopMetric({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Row(
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Icon(icon, color: Colors.white, size: 20),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
+              _buildHeroTag(
+                icon: Icons.storefront_outlined,
+                text: '${products.length} productos',
+              ),
+              _buildHeroTag(
+                icon: Icons.auto_graph_rounded,
+                text: stockText,
+              ),
+              _buildHeroTag(
+                icon: Icons.sync_rounded,
+                text: isLoading ? 'Actualizando' : 'Sincronizado',
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Tu tienda lista para vender',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              height: 1.04,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Hola, $userName. Esta pantalla está pensada más como home comercial de app de pedidos: rápida, visual y cómoda en móvil y web.',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.78),
+              fontSize: 12.8,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 16),
+          isMobile
+              ? Column(
+            children: [
+              _buildHeroHighlightCard(
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Monedas disponibles',
+                value: '${_coins(coinBalance)} mon.',
+              ),
+              const SizedBox(height: 10),
+              _buildHeroHighlightCard(
+                icon: Icons.attach_money_rounded,
+                title: 'Referencia monetaria',
+                value: _money(moneyReference),
+              ),
+            ],
+          )
+              : Row(
+            children: [
+              Expanded(
+                child: _buildHeroHighlightCard(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Monedas disponibles',
+                  value: '${_coins(coinBalance)} mon.',
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildHeroHighlightCard(
+                  icon: Icons.attach_money_rounded,
+                  title: 'Referencia monetaria',
+                  value: _money(moneyReference),
                 ),
               ),
             ],
           ),
-        ),
-      ],
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _buildHeroMiniCard(
+                title: 'Activos',
+                value: _activeProducts(products).toString(),
+              ),
+              _buildHeroMiniCard(
+                title: 'Pausados',
+                value: _pausedProducts(products).toString(),
+              ),
+              _buildHeroMiniCard(
+                title: 'Stock bajo',
+                value: _lowStockProducts(products).length.toString(),
+              ),
+              _buildHeroMiniCard(
+                title: 'Agotados',
+                value: _soldOutProducts(products).length.toString(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            decoration: BoxDecoration(
+              color: stockColor.withOpacity(0.16),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: stockColor.withOpacity(0.24)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.circle, color: stockColor, size: 12),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Estado general: $stockText',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.96),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          isMobile
+              ? Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _goToProducts,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.storefront_rounded, size: 18),
+                  label: const Text('Ver productos'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _goToCreateProduct,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: _textDark,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_box_outlined, size: 18),
+                  label: const Text('Publicar producto'),
+                ),
+              ),
+            ],
+          )
+              : Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _goToProducts,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.storefront_rounded, size: 18),
+                  label: const Text('Ver productos'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _goToCreateProduct,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: _textDark,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add_box_outlined, size: 18),
+                  label: const Text('Publicar producto'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -1339,12 +1093,12 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.10),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: Colors.white, size: 14),
+          Icon(icon, size: 14, color: Colors.white),
           const SizedBox(width: 6),
           Text(
             text,
@@ -1359,19 +1113,76 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildHeroStat({
-    required String label,
+  Widget _buildHeroHighlightCard({
+    required IconData icon,
+    required String title,
     required String value,
   }) {
     return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.10),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroMiniCard({
+    required String title,
+    required String value,
+  }) {
+    return Container(
+      width: 110,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             value,
@@ -1379,14 +1190,13 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 24,
+              fontSize: 18,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            label,
-            textAlign: TextAlign.center,
+            title,
             style: const TextStyle(
               color: Colors.white70,
               fontSize: 11.5,
@@ -1398,173 +1208,568 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildHeroBottomInfo({
-    required String title,
-    required String value,
+  Widget _buildWalletSection({
+    required double coinBalance,
+    required double moneyReference,
+    required List<ProductModel> products,
+    required bool isDesktop,
   }) {
+    final content = [
+      Expanded(
+        flex: 2,
+        child: _buildWalletPrimaryCard(
+          coinBalance: coinBalance,
+          moneyReference: moneyReference,
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          children: [
+            _buildWalletMiniCard(
+              title: 'Inventario',
+              value: '${_money(_inventoryValue(products))} mon.',
+              icon: Icons.inventory_2_outlined,
+              color: _primaryDark,
+            ),
+            const SizedBox(height: 12),
+            _buildWalletMiniCard(
+              title: 'Promedio',
+              value: '${_money(_averagePrice(products))} mon.',
+              icon: Icons.payments_outlined,
+              color: _orange,
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(
+          children: [
+            _buildWalletMiniCard(
+              title: 'Unidades',
+              value: _totalUnits(products).toString(),
+              icon: Icons.layers_outlined,
+              color: _green,
+            ),
+            const SizedBox(height: 12),
+            _buildWalletMiniCard(
+              title: 'Disponibilidad',
+              value: '${(_availabilityPercent(products) * 100).round()}%',
+              icon: Icons.auto_graph_rounded,
+              color: _gold,
+            ),
+          ],
+        ),
+      ),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
+        const Text(
+          'Monedas y operación',
+          style: TextStyle(
+            color: _textDark,
+            fontSize: 19,
             fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(height: 3),
-        Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
+        const SizedBox(height: 4),
+        const Text(
+          'Una franja más visual para que el saldo y la operación se noten más.',
+          style: TextStyle(
+            color: _textSoft,
+            fontSize: 12.5,
+            height: 1.4,
           ),
+        ),
+        const SizedBox(height: 12),
+        if (isDesktop)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: content,
+          )
+        else
+          Column(
+            children: [
+              _buildWalletPrimaryCard(
+                coinBalance: coinBalance,
+                moneyReference: moneyReference,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildWalletMiniCard(
+                      title: 'Inventario',
+                      value: '${_money(_inventoryValue(products))} mon.',
+                      icon: Icons.inventory_2_outlined,
+                      color: _primaryDark,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildWalletMiniCard(
+                      title: 'Promedio',
+                      value: '${_money(_averagePrice(products))} mon.',
+                      icon: Icons.payments_outlined,
+                      color: _orange,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildWalletMiniCard(
+                      title: 'Unidades',
+                      value: _totalUnits(products).toString(),
+                      icon: Icons.layers_outlined,
+                      color: _green,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildWalletMiniCard(
+                      title: 'Disponibilidad',
+                      value: '${(_availabilityPercent(products) * 100).round()}%',
+                      icon: Icons.auto_graph_rounded,
+                      color: _gold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildWalletPrimaryCard({
+    required double coinBalance,
+    required double moneyReference,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFE3B76F),
+            Color(0xFFC99659),
+            Color(0xFFB88549),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: _primary.withOpacity(0.20),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                color: Colors.white,
+                size: 22,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Monedas disponibles',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '${_coins(coinBalance)} mon.',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Referencia: ${_money(moneyReference)}',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.90),
+              fontSize: 12.6,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.icon(
+                onPressed: _goToCoins,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: _textDark,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 13,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.account_balance_wallet_rounded, size: 18),
+                label: const Text('Ir a monedas'),
+              ),
+              FilledButton.icon(
+                onPressed: _goToCreateProduct,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white.withOpacity(0.18),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 13,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.add_box_outlined, size: 18),
+                label: const Text('Publicar'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWalletMiniCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface.withOpacity(0.98),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _divider),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _textDark,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: _textSoft,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionsSection(double screenWidth) {
+    final items = [
+      _ActionItem(
+        title: 'Publicar',
+        subtitle: 'Nuevo producto',
+        icon: Icons.add_box_outlined,
+        color: _primary,
+        onTap: _goToCreateProduct,
+      ),
+      _ActionItem(
+        title: 'Productos',
+        subtitle: 'Gestionar catálogo',
+        icon: Icons.storefront_outlined,
+        color: _primaryDark,
+        onTap: _goToProducts,
+      ),
+      _ActionItem(
+        title: 'Monedas',
+        subtitle: 'Saldo e historial',
+        icon: Icons.account_balance_wallet_outlined,
+        color: _gold,
+        onTap: _goToCoins,
+      ),
+      _ActionItem(
+        title: 'Perfil',
+        subtitle: 'Tus datos',
+        icon: Icons.person_outline_rounded,
+        color: _green,
+        onTap: _goToProfile,
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Accesos rápidos',
+          style: TextStyle(
+            color: _textDark,
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Módulos directos al estilo de una app moderna de pedidos.',
+          style: TextStyle(
+            color: _textSoft,
+            fontSize: 12.5,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        GridView.builder(
+          itemCount: items.length,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: _quickActionsCrossAxisCount(screenWidth),
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: screenWidth < 500 ? 1.15 : 1.45,
+          ),
+          itemBuilder: (_, index) => _buildActionCard(items[index]),
         ),
       ],
     );
   }
 
-  Widget _buildSectionContainer({
-    required String title,
-    required String subtitle,
-    required Widget child,
-    String? actionLabel,
-    Future<void> Function()? onActionTap,
+  Widget _buildActionCard(_ActionItem item) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: () => item.onTap(),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _surface.withOpacity(0.98),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: _divider),
+          boxShadow: [
+            BoxShadow(
+              color: item.color.withOpacity(0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: item.color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(item.icon, color: item.color, size: 22),
+            ),
+            const Spacer(),
+            Text(
+              item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _textDark,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _textSoft,
+                fontSize: 12,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResponsiveMiddleSection({
+    required double screenWidth,
+    required List<ProductModel> products,
+    required double moneyReference,
+    required List<ProductModel> lowStockProducts,
+    required List<ProductModel> soldOutProducts,
   }) {
+    final left = _buildOverviewPanel(
+      screenWidth: screenWidth,
+      products: products,
+      moneyReference: moneyReference,
+    );
+
+    final right = _buildAlertsPanel(
+      lowStockProducts: lowStockProducts,
+      soldOutProducts: soldOutProducts,
+    );
+
+    if (screenWidth >= 1100) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: 6, child: left),
+          const SizedBox(width: 14),
+          Expanded(flex: 5, child: right),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        left,
+        const SizedBox(height: 18),
+        right,
+      ],
+    );
+  }
+
+  Widget _buildOverviewPanel({
+    required double screenWidth,
+    required List<ProductModel> products,
+    required double moneyReference,
+  }) {
+    final metrics = [
+      _MetricItem(
+        label: 'Productos',
+        value: products.length.toString(),
+        icon: Icons.inventory_2_outlined,
+        color: _primary,
+      ),
+      _MetricItem(
+        label: 'Activos',
+        value: _activeProducts(products).toString(),
+        icon: Icons.check_circle_outline,
+        color: _green,
+      ),
+      _MetricItem(
+        label: 'Unidades',
+        value: _totalUnits(products).toString(),
+        icon: Icons.layers_outlined,
+        color: _primaryDark,
+      ),
+      _MetricItem(
+        label: 'Promedio',
+        value: '${_money(_averagePrice(products))} mon.',
+        icon: Icons.payments_outlined,
+        color: _orange,
+      ),
+    ];
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _surface.withOpacity(0.97),
+        color: _surface.withOpacity(0.98),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: _border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 4,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: _primary,
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: _textDark,
-                        fontSize: 19,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: _textSoft,
-                        fontSize: 12.5,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (actionLabel != null && onActionTap != null) ...[
-                const SizedBox(width: 10),
-                InkWell(
-                  onTap: () => onActionTap(),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF8EE),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: _divider),
-                    ),
-                    child: Text(
-                      actionLabel,
-                      style: const TextStyle(
-                        color: _primaryDark,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
+          const Text(
+            'Resumen operativo',
+            style: TextStyle(
+              color: _textDark,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          const SizedBox(height: 16),
-          child,
+          const SizedBox(height: 4),
+          const Text(
+            'Más visual, más legible y mejor adaptado a móvil y web.',
+            style: TextStyle(
+              color: _textSoft,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.builder(
+            itemCount: metrics.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: _metricCrossAxisCount(screenWidth),
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: screenWidth < 450 ? 1.15 : 1.35,
+            ),
+            itemBuilder: (_, index) => _buildMetricCard(metrics[index]),
+          ),
+          const SizedBox(height: 14),
+          _buildAvailabilityCard(products, moneyReference),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryGrid({
-    required double screenWidth,
-    required List<_SummaryCardData> items,
-  }) {
-    return GridView.builder(
-      itemCount: items.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: _summaryCrossAxisCount(screenWidth),
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: screenWidth < 400 ? 1.18 : 1.35,
-      ),
-      itemBuilder: (_, index) => _buildSummaryCard(items[index]),
-    );
-  }
-
-  Widget _buildSummaryCard(_SummaryCardData item) {
+  Widget _buildMetricCard(_MetricItem item) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFFCF8), Color(0xFFF8F1E7)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: _surfaceSoft,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: _divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: item.accent.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(item.icon, color: item.accent, size: 20),
-          ),
+          Icon(item.icon, size: 20, color: item.color),
           const Spacer(),
           Text(
             item.value,
@@ -1572,16 +1777,16 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: _textDark,
-              fontSize: 18,
+              fontSize: 17,
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            item.title,
+            item.label,
             style: const TextStyle(
               color: _textSoft,
-              fontSize: 12,
+              fontSize: 11.8,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -1590,65 +1795,42 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildStatusBanner({
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.09),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(0.18)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.monitor_heart_outlined, color: color, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: _textDark,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAvailabilityCard({
-    required double availability,
-    required int active,
-    required int total,
-    required double moneyReference,
-  }) {
-    final safePercent = availability.clamp(0.0, 1.0);
+  Widget _buildAvailabilityCard(
+      List<ProductModel> products,
+      double moneyReference,
+      ) {
+    final availability = _availabilityPercent(products).clamp(0.0, 1.0);
+    final healthColor = _stockHealthColor(products);
+    final healthLabel = _stockHealthLabel(products);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _surfaceMuted,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: _divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Icon(Icons.monitor_heart_outlined, color: healthColor, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Estado general: $healthLabel',
+                  style: TextStyle(
+                    color: healthColor,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           const Text(
             'Disponibilidad del catálogo',
             style: TextStyle(
@@ -1659,10 +1841,10 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           ),
           const SizedBox(height: 12),
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             child: LinearProgressIndicator(
-              value: safePercent,
-              minHeight: 11,
+              value: availability,
+              minHeight: 12,
               backgroundColor: const Color(0xFFE8DCCB),
               valueColor: const AlwaysStoppedAnimation(_primary),
             ),
@@ -1672,7 +1854,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             children: [
               Expanded(
                 child: Text(
-                  '$active activos',
+                  '${_activeProducts(products)} activos',
                   style: const TextStyle(
                     color: _textSoft,
                     fontSize: 12,
@@ -1681,7 +1863,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 ),
               ),
               Text(
-                '${(safePercent * 100).round()}%',
+                '${(availability * 100).round()}%',
                 style: const TextStyle(
                   color: _primaryDark,
                   fontSize: 12.5,
@@ -1690,7 +1872,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               ),
               const SizedBox(width: 8),
               Text(
-                '$total total',
+                '${products.length} total',
                 style: const TextStyle(
                   color: _textSoft,
                   fontSize: 12,
@@ -1734,45 +1916,120 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildAlertsContent({
+  Widget _buildAlertsPanel({
     required List<ProductModel> lowStockProducts,
     required List<ProductModel> soldOutProducts,
   }) {
-    if (lowStockProducts.isEmpty && soldOutProducts.isEmpty) {
-      return _buildEmptyCard(
-        icon: Icons.check_circle_outline_rounded,
-        title: 'Todo se ve en orden',
-        subtitle: 'No hay productos con stock bajo ni agotados en este momento.',
-      );
-    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface.withOpacity(0.98),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Atención inmediata',
+            style: TextStyle(
+              color: _textDark,
+              fontSize: 19,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Lo urgente primero, como en una app operativa de verdad.',
+            style: TextStyle(
+              color: _textSoft,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (lowStockProducts.isEmpty && soldOutProducts.isEmpty)
+            _buildEmptyAlerts()
+          else
+            Column(
+              children: [
+                if (soldOutProducts.isNotEmpty)
+                  ...soldOutProducts.take(2).map(
+                        (product) => _buildAlertCard(
+                      product: product,
+                      title: 'Producto agotado',
+                      subtitle: 'Ya no tienes stock disponible.',
+                      color: _red,
+                      icon: Icons.remove_shopping_cart_outlined,
+                      buttonText: 'Ver catálogo',
+                      onTap: _goToProducts,
+                    ),
+                  ),
+                if (lowStockProducts.isNotEmpty)
+                  ...lowStockProducts.take(3).map(
+                        (product) => _buildAlertCard(
+                      product: product,
+                      title: 'Stock bajo',
+                      subtitle: 'Solo quedan ${product.stock} unidades.',
+                      color: _orange,
+                      icon: Icons.warning_amber_rounded,
+                      buttonText: 'Reponer',
+                      onTap: () => _replenishProduct(product),
+                    ),
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
 
-    return Column(
-      children: [
-        if (soldOutProducts.isNotEmpty)
-          ...soldOutProducts.take(2).map(
-                (product) => _buildAlertCard(
-              product: product,
-              title: 'Producto agotado',
-              subtitle: 'Este producto ya no tiene stock disponible.',
-              accent: _red,
-              icon: Icons.remove_shopping_cart_outlined,
-              buttonText: 'Ver catálogo',
-              onTap: _goToProducts,
+  Widget _buildEmptyAlerts() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: _surfaceSoft,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _divider),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: _green.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(
+              Icons.check_circle_outline_rounded,
+              color: _green,
+              size: 28,
             ),
           ),
-        if (lowStockProducts.isNotEmpty)
-          ...lowStockProducts.take(3).map(
-                (product) => _buildAlertCard(
-              product: product,
-              title: 'Stock bajo',
-              subtitle: 'Solo quedan ${product.stock} unidades disponibles.',
-              accent: _orange,
-              icon: Icons.warning_amber_rounded,
-              buttonText: 'Reponer',
-              onTap: () => _replenishProduct(product),
+          const SizedBox(height: 14),
+          const Text(
+            'Todo en orden',
+            style: TextStyle(
+              color: _textDark,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
             ),
           ),
-      ],
+          const SizedBox(height: 8),
+          const Text(
+            'No hay productos con stock bajo ni agotados en este momento.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textSoft,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1780,7 +2037,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     required ProductModel product,
     required String title,
     required String subtitle,
-    required Color accent,
+    required Color color,
     required IconData icon,
     required String buttonText,
     required Future<void> Function() onTap,
@@ -1789,27 +2046,35 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: accent.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: accent.withOpacity(0.18)),
+        color: _surfaceSoft,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withOpacity(0.18)),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              Icon(icon, color: accent, size: 18),
-              const SizedBox(width: 8),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
-                    color: accent,
+                    color: color,
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
-              _buildStatusBadge(_productStatusText(product), accent),
+              _buildStatusBadge(_productStatusText(product), color),
             ],
           ),
           const SizedBox(height: 10),
@@ -1826,7 +2091,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               ),
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -1838,7 +2103,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -1848,12 +2113,12 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 text: '${_money(product.price)} mon. / ${product.unit ?? 'unidad'}',
               ),
               _buildSoftInfoChip(
-                icon: Icons.event_outlined,
-                text: _formatDate(product.harvestDate),
-              ),
-              _buildSoftInfoChip(
                 icon: Icons.inventory_2_outlined,
                 text: 'Stock ${product.stock}',
+              ),
+              _buildSoftInfoChip(
+                icon: Icons.event_outlined,
+                text: _formatDate(product.harvestDate),
               ),
             ],
           ),
@@ -1863,9 +2128,9 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             child: FilledButton(
               onPressed: () => onTap(),
               style: FilledButton.styleFrom(
-                backgroundColor: accent,
+                backgroundColor: color,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -1878,213 +2143,252 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildQuickActionsGrid({
+  Widget _buildRecentProductsSection({
     required double screenWidth,
+    required List<ProductModel> recentProducts,
   }) {
-    final actions = [
-      _QuickActionData(
-        icon: Icons.add_box_outlined,
-        title: 'Publicar',
-        subtitle: 'Crear producto',
-        accent: _primary,
-        onTap: _goToCreateProduct,
-      ),
-      _QuickActionData(
-        icon: Icons.storefront_outlined,
-        title: 'Productos',
-        subtitle: 'Gestionar catálogo',
-        accent: _primaryDark,
-        onTap: _goToProducts,
-      ),
-      _QuickActionData(
-        icon: Icons.account_balance_wallet_outlined,
-        title: 'Monedas',
-        subtitle: 'Saldo e historial',
-        accent: const Color(0xFFC68A28),
-        onTap: _goToCoins,
-      ),
-      _QuickActionData(
-        icon: Icons.person_outline_rounded,
-        title: 'Perfil',
-        subtitle: 'Editar datos',
-        accent: _green,
-        onTap: _goToProfile,
-      ),
-    ];
-
-    return GridView.builder(
-      itemCount: actions.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: _quickActionsCrossAxisCount(screenWidth),
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: screenWidth < 400 ? 1.05 : 1.2,
-      ),
-      itemBuilder: (_, index) => _buildQuickActionCard(actions[index]),
-    );
-  }
-
-  Widget _buildQuickActionCard(_QuickActionData action) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(22),
-      onTap: () => action.onTap(),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFFFCF8), Color(0xFFF8F2E8)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: _divider),
-          boxShadow: [
-            BoxShadow(
-              color: action.accent.withOpacity(0.06),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: action.accent.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Productos recientes',
+                    style: TextStyle(
+                      color: _textDark,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Un catálogo más bonito, más visual y mejor para móvil.',
+                    style: TextStyle(
+                      color: _textSoft,
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
-              child: Icon(action.icon, color: action.accent, size: 22),
             ),
-            const Spacer(),
-            Text(
-              action.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _textDark,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              action.subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _textSoft,
-                fontSize: 12,
-                height: 1.35,
+            TextButton(
+              onPressed: _goToProducts,
+              child: const Text(
+                'Ver todos',
+                style: TextStyle(
+                  color: _primaryDark,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 12),
+        if (recentProducts.isEmpty)
+          _buildEmptyProductsCard()
+        else
+          GridView.builder(
+            itemCount: recentProducts.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: _productGridCount(screenWidth),
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: screenWidth >= 1300
+                  ? 0.90
+                  : screenWidth >= 850
+                  ? 0.82
+                  : 0.92,
+            ),
+            itemBuilder: (_, index) => _buildProductCard(recentProducts[index]),
+          ),
+      ],
     );
   }
 
-  Widget _buildRecentProductCard(ProductModel product) {
-    final statusColor = _productStatusColor(product);
-    final statusText = _productStatusText(product);
-
+  Widget _buildEmptyProductsCard() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: _surfaceSoft,
+        color: _surface.withOpacity(0.98),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _divider),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
           Container(
-            width: 72,
-            height: 72,
+            width: 58,
+            height: 58,
             decoration: BoxDecoration(
-              color: const Color(0xFFF4ECE0),
+              color: _primary.withOpacity(0.12),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: product.picture != null && product.picture!.isNotEmpty
-                ? ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Image.network(
-                product.picture!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) {
-                  return const Icon(
-                    Icons.image_not_supported_outlined,
-                    color: _primary,
-                    size: 28,
-                  );
-                },
-              ),
-            )
-                : const Icon(
+            child: const Icon(
               Icons.inventory_2_outlined,
               color: _primary,
               size: 28,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(height: 14),
+          const Text(
+            'Aún no tienes productos publicados',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textDark,
+              fontSize: 16.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Cuando publiques productos, aquí aparecerán con un diseño más tipo catálogo comercial.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textSoft,
+              fontSize: 12.5,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductCard(ProductModel product) {
+    final statusColor = _productStatusColor(product);
+    final statusText = _productStatusText(product);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface.withOpacity(0.98),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: _divider),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 170,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              color: Color(0xFFF3EBDD),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+            ),
+            child: product.picture != null && product.picture!.isNotEmpty
+                ? ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(26),
+              ),
+              child: Image.network(
+                product.picture!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) {
+                  return const Center(
+                    child: Icon(
+                      Icons.image_not_supported_outlined,
+                      color: _primary,
+                      size: 34,
+                    ),
+                  );
+                },
+              ),
+            )
+                : const Center(
+              child: Icon(
+                Icons.inventory_2_outlined,
+                color: _primary,
+                size: 34,
+              ),
+            ),
+          ),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        product.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _textDark,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          product.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _textDark,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildStatusBadge(statusText, statusColor),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  product.description ?? 'Sin descripción disponible.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _textSoft,
-                    fontSize: 12.5,
-                    height: 1.35,
+                      const SizedBox(width: 8),
+                      _buildStatusBadge(statusText, statusColor),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _buildSoftInfoChip(
-                      icon: Icons.payments_outlined,
-                      text: '${_money(product.price)} mon. / ${product.unit ?? 'unidad'}',
+                  const SizedBox(height: 6),
+                  Text(
+                    product.description ?? 'Sin descripción disponible.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _textSoft,
+                      fontSize: 12.5,
+                      height: 1.35,
                     ),
-                    _buildSoftInfoChip(
-                      icon: Icons.inventory_2_outlined,
-                      text: 'Stock ${product.stock}',
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildSoftInfoChip(
+                        icon: Icons.payments_outlined,
+                        text: '${_money(product.price)} mon. / ${product.unit ?? 'unidad'}',
+                      ),
+                      _buildSoftInfoChip(
+                        icon: Icons.inventory_2_outlined,
+                        text: 'Stock ${product.stock}',
+                      ),
+                      _buildSoftInfoChip(
+                        icon: Icons.calendar_month_outlined,
+                        text: _harvestLabel(product.harvestDate),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _goToProducts,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _primaryDark,
+                        side: BorderSide(color: _divider),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: const Icon(Icons.storefront_outlined, size: 18),
+                      label: const Text('Gestionar'),
                     ),
-                    _buildSoftInfoChip(
-                      icon: Icons.calendar_month_outlined,
-                      text: _harvestLabel(product.harvestDate),
-                    ),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -2140,55 +2444,6 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildEmptyCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: _surfaceSoft,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _divider),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: _primary.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(icon, color: _primary, size: 28),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _textDark,
-              fontSize: 16.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: _textSoft,
-              fontSize: 12.5,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBottomNavigationBar() {
     final items = <_BottomNavData>[
       const _BottomNavData(
@@ -2218,20 +2473,20 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
+          borderRadius: BorderRadius.circular(30),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
             child: Container(
               height: 82,
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.86),
-                borderRadius: BorderRadius.circular(28),
+                color: Colors.white.withOpacity(0.88),
+                borderRadius: BorderRadius.circular(30),
                 border: Border.all(color: Colors.white.withOpacity(0.65)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.08),
-                    blurRadius: 22,
+                    blurRadius: 20,
                     offset: const Offset(0, 8),
                   ),
                 ],
@@ -2298,33 +2553,33 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   }
 }
 
-class _SummaryCardData {
-  final IconData icon;
+class _ActionItem {
   final String title;
-  final String value;
-  final Color accent;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final Future<void> Function() onTap;
 
-  const _SummaryCardData({
-    required this.icon,
+  const _ActionItem({
     required this.title,
-    required this.value,
-    required this.accent,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
   });
 }
 
-class _QuickActionData {
+class _MetricItem {
+  final String label;
+  final String value;
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color accent;
-  final Future<void> Function() onTap;
+  final Color color;
 
-  const _QuickActionData({
+  const _MetricItem({
+    required this.label,
+    required this.value,
     required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.accent,
-    required this.onTap,
+    required this.color,
   });
 }
 

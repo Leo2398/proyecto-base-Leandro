@@ -13,4 +13,17 @@ abstract class ILocationService {
 
   /// Obtiene un punto de recogida por su ID incluyendo coordenadas
   Future<PickupLocationModel?> getPickupLocationById(int id);
+
+  /// Actualiza una ubicación existente en la tabla Location
+  Future<bool> updateLocation({
+    required int locationId,
+    required double latitude,
+    required double longitude,
+  });
+
+  /// Actualiza la dirección de un punto de recogida existente
+  Future<bool> updatePickupLocation({
+    required int locationId,
+    required String address,
+  });
 }

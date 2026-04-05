@@ -76,6 +76,21 @@ class UserService implements IUserService {
     }
   }
 
+  /// Obtiene todos los usuarios de un rol específico
+  Future<List<UserModel>> getUsersByRole(int role) async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        'SELECT * FROM User WHERE role = :role ORDER BY name ASC',
+        {'role': role},
+      );
+      return result.rows.map((r) => UserModel.fromMap(r.assoc())).toList();
+    } catch (e) {
+      print('Error en getUsersByRole: $e');
+      return [];
+    }
+  }
+
   /// Registra un nuevo usuario en la BD
   /// Guarda Location, PickupLocation y User en orden
   @override
@@ -215,102 +230,6 @@ class UserService implements IUserService {
       return true;
     } catch (e) {
       print('Error en updateUserProfile: $e');
-      return false;
-    }
-  }
-
-  Future<bool> updateProducerProfileData({
-    required UserModel user,
-    double? latitude,
-    double? longitude,
-    String? address,
-  }) async {
-    try {
-      final conn = await _db.getConnection();
-
-      int? pickUpLocationID = user.pickUpLocationID;
-
-      final hasLocationData = latitude != null &&
-          longitude != null &&
-          address != null &&
-          address.trim().isNotEmpty;
-
-      if (hasLocationData) {
-        if (user.pickUpLocationID != null) {
-          await conn.execute(
-            '''
-          UPDATE Location
-          SET Latitude = :latitude, Longitude = :longitude
-          WHERE ID = :id
-          ''',
-            {
-              'latitude': latitude,
-              'longitude': longitude,
-              'id': user.pickUpLocationID,
-            },
-          );
-
-          await conn.execute(
-            '''
-          UPDATE PickupLocation
-          SET address = :address
-          WHERE LocationID = :id
-          ''',
-            {
-              'address': address.trim(),
-              'id': user.pickUpLocationID,
-            },
-          );
-
-          pickUpLocationID = user.pickUpLocationID;
-        } else {
-          final locationID = await _locationService.createLocation(
-            LocationModel(
-              latitude: latitude,
-              longitude: longitude,
-            ),
-          );
-
-          if (locationID == null) return false;
-
-          final pickupSuccess = await _locationService.createPickupLocation(
-            PickupLocationModel(
-              locationID: locationID,
-              address: address.trim(),
-            ),
-          );
-
-          if (!pickupSuccess) return false;
-
-          pickUpLocationID = locationID;
-        }
-      }
-
-      await conn.execute(
-        '''
-      UPDATE User SET
-        name = :name,
-        email = :email,
-        cellphone = :cellphone,
-        image = :image,
-        description = :description,
-        pickUpLocationID = :pickUpLocationID
-      WHERE ID = :id
-      ''',
-        {
-          'name': user.name.trim(),
-          'email': user.email.trim(),
-          'cellphone': user.cellphone,
-          'image': user.image,
-          'description': user.description,
-          'pickUpLocationID': pickUpLocationID,
-          'id': user.id,
-        },
-      );
-
-      return true;
-    } catch (e) {
-      print('Error en updateProducerProfileData: $e');
       return false;
     }
   }
@@ -468,6 +387,85 @@ class UserService implements IUserService {
     } catch (e) {
       print('Error en login: $e');
       return null;
+    }
+  }
+
+  Future<bool> updateProducerProfileData({
+    required UserModel user,
+    required double latitude,
+    required double longitude,
+    required String address,
+  }) async {
+    try {
+      final conn = await _db.getConnection();
+      int? pickUpLocationID = user.pickUpLocationID;
+
+      /// Si ya existe un punto de recogida, actualiza Location y PickupLocation
+      if (pickUpLocationID != null) {
+        final updatedLocation = await _locationService.updateLocation(
+          locationId: pickUpLocationID,
+          latitude: latitude,
+          longitude: longitude,
+        );
+
+        if (!updatedLocation) return false;
+
+        final updatedPickup = await _locationService.updatePickupLocation(
+          locationId: pickUpLocationID,
+          address: address,
+        );
+
+        if (!updatedPickup) return false;
+      } else {
+        /// Si no existe, crea Location y PickupLocation
+        final locationID = await _locationService.createLocation(
+          LocationModel(
+            latitude: latitude,
+            longitude: longitude,
+          ),
+        );
+
+        if (locationID == null) return false;
+
+        final pickupSuccess = await _locationService.createPickupLocation(
+          PickupLocationModel(
+            locationID: locationID,
+            address: address,
+          ),
+        );
+
+        if (!pickupSuccess) return false;
+
+        pickUpLocationID = locationID;
+      }
+
+      /// Actualiza el perfil del productor incluyendo descripción y pickUpLocationID
+      await conn.execute(
+        '''
+      UPDATE User
+      SET name = :name,
+          email = :email,
+          cellphone = :cellphone,
+          image = :image,
+          description = :description,
+          pickUpLocationID = :pickUpLocationID
+      WHERE ID = :id
+      ''',
+        {
+          'name': user.name,
+          'email': user.email,
+          'cellphone': user.cellphone,
+          'image': user.image,
+          'description': user.description,
+          'pickUpLocationID': pickUpLocationID,
+          'id': user.id,
+        },
+      );
+
+      return true;
+    } catch (e) {
+      print('Error en updateProducerProfileData: $e');
+      return false;
     }
   }
 

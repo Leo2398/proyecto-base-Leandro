@@ -6,7 +6,9 @@ import 'views/client/client_dashboard_view.dart';
 import 'views/admin/admin_dashboard_view.dart';
 import 'views/producer/producer_dashboard_view.dart';
 import 'controllers/product_controller.dart';
+import 'controllers/cart_controller.dart';
 import 'services/product_service.dart';
+import 'controllers/request_controller.dart';
 import 'controllers/coin_movement_controller.dart';
 import 'services/coin_movement_service.dart';
 void main() {
@@ -24,6 +26,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => ProductController(productService: ProductService()),
         ),
+        ChangeNotifierProvider(create: (_) => CartController()),
+        ChangeNotifierProvider(create: (_) => RequestController()),
         ChangeNotifierProvider(
           create: (_) => CoinMovementController(
             coinMovementService: CoinMovementService(),

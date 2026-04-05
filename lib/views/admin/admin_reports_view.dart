@@ -145,26 +145,33 @@ class _AdminReportsViewState extends State<AdminReportsView> {
     bool soloProductos = false,
     SectorReportItem? soloSector,
   }) async {
+    // Fuente TTF con soporte Unicode completo (tildes, ñ, etc.)
+    final ttfBold = await PdfGoogleFonts.nunitoBold();
+    final ttfRegular = await PdfGoogleFonts.nunitoRegular();
+    final ttfSemiBold = await PdfGoogleFonts.nunitoSemiBold();
+
     final periodo = '${_fmtDate(_from)} - ${_fmtDate(_to)}';
     final titleStyle = pw.TextStyle(
+        font: ttfBold,
         fontSize: 20,
         fontWeight: pw.FontWeight.bold,
         color: PdfColors.brown800);
     final sectionStyle = pw.TextStyle(
+        font: ttfSemiBold,
         fontSize: 14,
         fontWeight: pw.FontWeight.bold,
         color: PdfColors.brown700);
     final bodyStyle =
-        pw.TextStyle(fontSize: 10, color: PdfColors.grey800);
+        pw.TextStyle(font: ttfRegular, fontSize: 10, color: PdfColors.grey800);
 
     final pdf = pw.Document();
     final List<pw.Widget> content = [];
 
     // Header
     content.addAll([
-      pw.Text('AgroMarket Admin — Reporte General', style: titleStyle),
+      pw.Text('AgroMarket Admin - Reporte General', style: titleStyle),
       pw.SizedBox(height: 4),
-      pw.Text('Período: $periodo', style: bodyStyle),
+      pw.Text('Periodo: $periodo', style: bodyStyle),
       pw.Divider(color: PdfColors.brown300, thickness: 1),
       pw.SizedBox(height: 12),
     ]);
@@ -180,7 +187,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         final pct = total > 0 ? (e.totalVentas / total * 100) : 0.0;
         content.add(_pdfRow(
             '${i + 1}. ${e.nombre}',
-            '${_fmtMoney(e.totalVentas)}  •  ${e.totalProductos} prod  •  ↑ ${pct.toStringAsFixed(1)}%',
+            '${_fmtMoney(e.totalVentas)} | ${e.totalProductos} prod | +${pct.toStringAsFixed(1)}%',
             bodyStyle));
       }
       content.add(pw.SizedBox(height: 12));
@@ -195,7 +202,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         final c = _clientes[i];
         content.add(_pdfRow(
             '${i + 1}. ${c.nombre}',
-            '${_fmtMoney(c.balance)}  •  ${c.email}',
+            '${_fmtMoney(c.balance)} | ${c.email}',
             bodyStyle));
       }
       content.add(pw.SizedBox(height: 12));
@@ -209,7 +216,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
       for (final p in _productos) {
         content.add(_pdfRow(
             p.nombre,
-            '${_fmtMoney(p.precio)}  •  ${p.stock} ${p.unidad}  •  ${p.empresaNombre}',
+            '${_fmtMoney(p.precio)} | ${p.stock} ${p.unidad} | ${p.empresaNombre}',
             bodyStyle));
       }
       content.add(pw.SizedBox(height: 12));
@@ -228,7 +235,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
         _pdfRow('Total Ventas', _fmtMoney(soloSector.totalVentas), bodyStyle),
         _pdfRow('Productos', '${soloSector.totalProductos}', bodyStyle),
         _pdfRow('Empresas', '${soloSector.totalEmpresas}', bodyStyle),
-        _pdfRow('Participación de mercado', '↑ $pct%', bodyStyle),
+        _pdfRow('Participacion de mercado', '+$pct%', bodyStyle),
       ]);
     }
 
@@ -245,7 +252,7 @@ class _AdminReportsViewState extends State<AdminReportsView> {
             : '0';
         content.add(_pdfRow(
             s.nombre,
-            '${_fmtMoney(s.totalVentas)}  •  ${s.totalProductos} prod  •  ${s.totalEmpresas} emp  •  ↑ $pct%',
+            '${_fmtMoney(s.totalVentas)} | ${s.totalProductos} prod | ${s.totalEmpresas} emp | +$pct%',
             bodyStyle));
       }
     }

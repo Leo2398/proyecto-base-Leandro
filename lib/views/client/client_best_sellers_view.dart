@@ -1,7 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../controllers/cart_controller.dart';
 import '../../models/report_models.dart';
 import '../../services/product_service.dart';
+import 'client_product_detail_view.dart';
 
 /// Vista de productos más vendidos para el cliente
 /// Principio S de SOLID: solo maneja la UI de más vendidos
@@ -24,6 +27,7 @@ class _ClientBestSellersViewState extends State<ClientBestSellersView> {
   static const List<TopProductItem> _placeholders = [
     TopProductItem(
       id: -1,
+      producerId: 0,
       nombre: 'Tomate Cherry Orgánico',
       producerName: 'FreshFarm Co.',
       precio: 2.0,
@@ -33,6 +37,7 @@ class _ClientBestSellersViewState extends State<ClientBestSellersView> {
     ),
     TopProductItem(
       id: -2,
+      producerId: 0,
       nombre: 'Lechuga Hidropónica',
       producerName: 'Verde Vital',
       precio: 4.0,
@@ -100,7 +105,16 @@ class _ClientBestSellersViewState extends State<ClientBestSellersView> {
                   final item = _displayItems[index - 1];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: _BestSellerCard(item: item, rank: index),
+                    child: GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              ClientProductDetailView(item: item),
+                        ),
+                      ),
+                      child: _BestSellerCard(item: item, rank: index),
+                    ),
                   );
                 },
               ),
@@ -146,6 +160,20 @@ class _BestSellerCard extends StatelessWidget {
 
   const _BestSellerCard({required this.item, required this.rank});
 
+  void _addToCart(BuildContext context) {
+    context.read<CartController>().addFromTopItem(item);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('"${item.nombre}" agregado al carrito'),
+        backgroundColor: const Color(0xFF5A8A5A),
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   static const _cardColors = [
     Color(0xFFE8F5E8),
     Color(0xFFE8F0F8),
@@ -178,111 +206,143 @@ class _BestSellerCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          /// Imagen del producto
-          ClipRRect(
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(16),
-              bottomLeft: Radius.circular(16),
-            ),
-            child: Container(
-              width: 110,
-              height: 110,
-              color: bgColor,
-              child: imgProvider != null
-                  ? Image(image: imgProvider, fit: BoxFit.cover)
-                  : const Center(
-                      child: Icon(
-                        Icons.eco_outlined,
-                        size: 44,
-                        color: Color(0xFF5A8A5A),
-                      ),
-                    ),
-            ),
-          ),
-
-          /// Info
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  /// Ranking badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF5A8A5A),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '#$rank más vendido',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-
-                  Text(
-                    item.nombre,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF2D2D2D),
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-
-                  Text(
-                    item.producerName,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF888888),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      /// Precio
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.monetization_on_outlined,
-                            size: 14,
-                            color: Color(0xFFB8860B),
+          Row(
+            children: [
+              /// Imagen del producto
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                ),
+                child: Container(
+                  width: 110,
+                  height: 110,
+                  color: bgColor,
+                  child: imgProvider != null
+                      ? Image(image: imgProvider, fit: BoxFit.cover)
+                      : const Center(
+                          child: Icon(
+                            Icons.eco_outlined,
+                            size: 44,
+                            color: Color(0xFF5A8A5A),
                           ),
-                          const SizedBox(width: 2),
+                        ),
+                ),
+              ),
+
+              /// Info
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      /// Ranking badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF5A8A5A),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '#$rank más vendido',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+
+                      Text(
+                        item.nombre,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2D2D2D),
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+
+                      Text(
+                        item.producerName,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF888888),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          /// Precio
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.monetization_on_outlined,
+                                size: 14,
+                                color: Color(0xFFB8860B),
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${item.precio.toStringAsFixed(item.precio % 1 == 0 ? 0 : 2)}/${item.unidad}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2D2D2D),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          /// Stock
                           Text(
-                            '${item.precio.toStringAsFixed(item.precio % 1 == 0 ? 0 : 2)}/${item.unidad}',
+                            'Stock: ${item.stock}',
                             style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF2D2D2D),
+                              fontSize: 11,
+                              color: Color(0xFF888888),
                             ),
                           ),
                         ],
                       ),
-
-                      /// Stock
-                      Text(
-                        'Stock: ${item.stock}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF888888),
-                        ),
-                      ),
                     ],
                   ),
-                ],
+                ),
+              ),
+            ],
+          ),
+
+          /// Botón agregar al carrito
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: item.stock > 0
+                    ? () => _addToCart(context)
+                    : null,
+                icon: const Icon(Icons.shopping_cart_outlined, size: 16),
+                label: Text(
+                  item.stock > 0 ? 'Agregar al carrito' : 'Sin stock',
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF5A8A5A),
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
               ),
             ),
           ),

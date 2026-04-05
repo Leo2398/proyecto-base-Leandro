@@ -13,9 +13,6 @@ import '../core/email_helper.dart';
 import '../services/password_reset_service.dart';
 import '../models/schedule_model.dart';
 import '../services/schedule_service.dart';
-
-
-
 /// Controlador de Usuario
 /// Principio S de SOLID: solo maneja la lógica de negocio de usuarios
 /// Principio D de SOLID: depende de la interfaz IUserService
@@ -28,7 +25,6 @@ class UserController extends ChangeNotifier {
   final ProductFamilyService _productFamilyService = ProductFamilyService();
   /// Servicio de recuperación de contraseña
   final PasswordResetService _passwordResetService = PasswordResetService();
-
   final ScheduleService _scheduleService = ScheduleService();
 
   /// Usuario actualmente logueado
@@ -89,6 +85,58 @@ class UserController extends ChangeNotifier {
     } finally {
       _isLoading = false;
       _sessionChecked = true;
+      notifyListeners();
+    }
+  }
+    Future<void> reloadCurrentUser() async {
+    if (_currentUser?.id == null) return;
+    try {
+      final updated = await _userService.getUserById(_currentUser!.id!);
+      if (updated != null) {
+        _currentUser = updated;
+        await SessionHelper.saveSession(_currentUser!);
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error en reloadCurrentUser: $e');
+    }
+  }
+
+  Future<UserModel?> getFreshCurrentUser() async {
+    if (_currentUser?.id == null) return _currentUser;
+
+    try {
+      final freshUser = await _userService.getUserById(_currentUser!.id!);
+
+      if (freshUser != null) {
+        _currentUser = freshUser;
+        await SessionHelper.saveSession(_currentUser!);
+        notifyListeners();
+      }
+
+      return _currentUser;
+    } catch (e) {
+      print('Error en getFreshCurrentUser: $e');
+      return _currentUser;
+    }
+  }
+
+  Future<void> loadProducerSchedules() async {
+    try {
+      if (_currentUser?.id == null) {
+        _producerSchedules = [];
+        notifyListeners();
+        return;
+      }
+
+      _errorMessage = null;
+      _producerSchedules = await _scheduleService.getSchedulesByProducerId(
+        _currentUser!.id!,
+      );
+    } catch (e) {
+      _errorMessage = 'Error al cargar horarios del productor: $e';
+      _producerSchedules = [];
+    } finally {
       notifyListeners();
     }
   }
@@ -237,49 +285,6 @@ class UserController extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
-    }
-  }
-
-  Future<void> loadProducerSchedules() async {
-    try {
-      _isLoading = true;
-      _errorMessage = null;
-      notifyListeners();
-
-      if (_currentUser == null) {
-        _errorMessage = 'No hay usuario logueado';
-        return;
-      }
-
-      _producerSchedules =
-      await _scheduleService.getSchedulesByProducerId(_currentUser!.id!);
-    } catch (e) {
-      _errorMessage = 'Error al cargar horarios del productor: $e';
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<UserModel?> getFreshCurrentUser() async {
-    try {
-      if (_currentUser == null || _currentUser!.id == null) {
-        return null;
-      }
-
-      final freshUser = await _userService.getUserById(_currentUser!.id!);
-
-      if (freshUser != null) {
-        _currentUser = freshUser;
-        await SessionHelper.saveSession(_currentUser!);
-        notifyListeners();
-      }
-
-      return _currentUser;
-    } catch (e) {
-      _errorMessage = 'Error al refrescar usuario: $e';
-      notifyListeners();
-      return _currentUser;
     }
   }
 
@@ -440,7 +445,6 @@ class UserController extends ChangeNotifier {
     }
   }
 
-
   Future<bool> updateProducerProfile({
     required String name,
     required String email,
@@ -448,9 +452,9 @@ class UserController extends ChangeNotifier {
     required String description,
     String? image,
     required List<ScheduleModel> schedules,
-    double? latitude,
-    double? longitude,
-    String? address,
+    required double latitude,
+    required double longitude,
+    required String address,
   }) async {
     try {
       _isLoading = true;
@@ -469,17 +473,6 @@ class UserController extends ChangeNotifier {
 
       if (email.trim().isEmpty) {
         _errorMessage = 'El correo no puede estar vacío';
-        return false;
-      }
-
-      if (description.trim().isEmpty) {
-        _errorMessage = 'La descripción no puede estar vacía';
-        return false;
-      }
-
-      if ((address?.trim().isNotEmpty ?? false) &&
-          (latitude == null || longitude == null)) {
-        _errorMessage = 'Debes seleccionar una ubicación válida en el mapa';
         return false;
       }
 
@@ -506,35 +499,37 @@ class UserController extends ChangeNotifier {
         state: _currentUser!.state,
       );
 
-      final success = await (_userService as UserService).updateProducerProfileData(
+      final success = await _userService.updateProducerProfileData(
         user: updatedUser,
         latitude: latitude,
         longitude: longitude,
-        address: address?.trim(),
+        address: address,
       );
 
-      if (!success) {
+      if (success) {
+        final producerId = _currentUser!.id!;
+
+        final deleted = await _scheduleService.deleteSchedulesByProducerId(producerId);
+        if (!deleted) {
+          _errorMessage = 'Error al reemplazar los horarios del productor';
+          return false;
+        }
+
+        for (final schedule in schedules) {
+          final created = await _scheduleService.createSchedule(schedule);
+          if (!created) {
+            _errorMessage = 'Error al guardar los horarios del productor';
+            return false;
+          }
+        }
+
+        await getFreshCurrentUser();
+        _producerSchedules = await _scheduleService.getSchedulesByProducerId(producerId);
+      } else {
         _errorMessage = 'Error al actualizar el perfil del productor';
-        return false;
       }
 
-      final schedulesSuccess = await _scheduleService.saveProducerSchedules(
-        _currentUser!.id!,
-        schedules,
-      );
-
-      if (!schedulesSuccess) {
-        _errorMessage =
-        'Se actualizó el perfil, pero ocurrió un error al guardar los horarios';
-        return false;
-      }
-
-      final refreshedUser = await _userService.getUserById(_currentUser!.id!);
-      _currentUser = refreshedUser ?? updatedUser;
-      _producerSchedules = schedules;
-      await SessionHelper.saveSession(_currentUser!);
-
-      return true;
+      return success;
     } catch (e) {
       _errorMessage = 'Error al actualizar el perfil del productor: $e';
       return false;
@@ -783,7 +778,6 @@ class UserController extends ChangeNotifier {
     _currentUser = null;
     _errorMessage = null;
     _mustChangePassword = false;
-    _producerSchedules = [];
     notifyListeners();
   }
   /// Envía el código de recuperación al email del usuario

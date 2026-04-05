@@ -1,9 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../controllers/coin_movement_controller.dart';
 import '../../controllers/product_controller.dart';
 import '../../controllers/user_controller.dart';
+import '../../core/image_helper.dart';
+import '../../models/product_family_model.dart';
 import '../../models/product_model.dart';
+import '../../services/product_family_service.dart';
 
 class ProducerCreateProductView extends StatefulWidget {
   const ProducerCreateProductView({super.key});
@@ -21,7 +28,18 @@ class _ProducerCreateProductViewState
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _stockController = TextEditingController();
-  final TextEditingController _imageController = TextEditingController();
+
+  final ProductFamilyService _productFamilyService = ProductFamilyService();
+  final ImagePicker _picker = ImagePicker();
+
+  List<ProductFamilyModel> _families = [];
+  int? _selectedFamilyId;
+  bool _isLoadingFamilies = false;
+
+  File? _selectedImageFile;
+  String? _imageBase64;
+  bool _isPickingImage = false;
+  bool _isSubmitting = false;
 
   DateTime? _harvestDate;
 
@@ -45,9 +63,9 @@ class _ProducerCreateProductViewState
     _descriptionController.addListener(_refreshPreview);
     _priceController.addListener(_refreshPreview);
     _stockController.addListener(_refreshPreview);
-    _imageController.addListener(_refreshPreview);
 
     _selectedUnit = _units.first;
+    _loadFamilies();
   }
 
   void _refreshPreview() {
@@ -62,22 +80,56 @@ class _ProducerCreateProductViewState
     _descriptionController.removeListener(_refreshPreview);
     _priceController.removeListener(_refreshPreview);
     _stockController.removeListener(_refreshPreview);
-    _imageController.removeListener(_refreshPreview);
 
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
     _stockController.dispose();
-    _imageController.dispose();
     super.dispose();
   }
 
+  Future<void> _loadFamilies() async {
+    try {
+      setState(() {
+        _isLoadingFamilies = true;
+      });
+
+      final families = await _productFamilyService.getAll();
+
+      if (!mounted) return;
+
+      setState(() {
+        _families = families;
+        if (_families.isNotEmpty) {
+          _selectedFamilyId = _families.first.id;
+        }
+        _isLoadingFamilies = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingFamilies = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF4E3426),
+          content: Text('Error cargando familias: $e'),
+        ),
+      );
+    }
+  }
+
   Future<void> _selectDate() async {
+    final now = DateTime.now();
+    final initialDate = _harvestDate ?? now;
+
     final date = await showDatePicker(
       context: context,
-      initialDate: _harvestDate ?? DateTime.now(),
+      initialDate: initialDate.isAfter(now) ? now : initialDate,
       firstDate: DateTime(2023),
-      lastDate: DateTime(2030),
+      lastDate: now,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -100,10 +152,189 @@ class _ProducerCreateProductViewState
     }
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      setState(() {
+        _isPickingImage = true;
+      });
+
+      final picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 82,
+        maxWidth: 1400,
+        maxHeight: 1400,
+      );
+
+      if (picked == null) {
+        if (!mounted) return;
+        setState(() {
+          _isPickingImage = false;
+        });
+        return;
+      }
+
+      final file = File(picked.path);
+      final base64 = await ImageHelper.toBase64(file);
+
+      if (!mounted) return;
+
+      if (base64 == null || base64.isEmpty) {
+        setState(() {
+          _isPickingImage = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF4E3426),
+            content: Text('No se pudo procesar la imagen seleccionada'),
+          ),
+        );
+        return;
+      }
+
+      await precacheImage(FileImage(file), context);
+
+      if (!mounted) return;
+
+      setState(() {
+        _selectedImageFile = file;
+        _imageBase64 = base64;
+        _isPickingImage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isPickingImage = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF4E3426),
+          content: Text('Error seleccionando imagen: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showImageSourceSheet() async {
+    FocusScope.of(context).unfocus();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.10),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Seleccionar imagen',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF4E3426),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Puedes tomar una foto o elegir una imagen desde tu galería.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF8C7B6B),
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildImageSourceOption(
+                    icon: Icons.photo_camera_back_rounded,
+                    title: 'Tomar foto',
+                    subtitle: 'Usar la cámara del dispositivo',
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await _pickImage(ImageSource.camera);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _buildImageSourceOption(
+                    icon: Icons.photo_library_rounded,
+                    title: 'Elegir de la galería',
+                    subtitle: 'Seleccionar una imagen guardada',
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await _pickImage(ImageSource.gallery);
+                    },
+                  ),
+                  if (_selectedImageFile != null) ...[
+                    const SizedBox(height: 10),
+                    _buildImageSourceOption(
+                      icon: Icons.delete_outline_rounded,
+                      title: 'Quitar imagen',
+                      subtitle: 'Eliminar la imagen seleccionada',
+                      iconColor: const Color(0xFFD96C2F),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _clearSelectedImage();
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _clearSelectedImage() {
+    setState(() {
+      _selectedImageFile = null;
+      _imageBase64 = null;
+    });
+  }
+
   Future<void> _publishProduct() async {
     FocusScope.of(context).unfocus();
 
+    if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
+
+    if (_families.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('No hay familias disponibles para seleccionar'),
+        ),
+      );
+      return;
+    }
+
+    if (_selectedFamilyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Selecciona la familia del producto'),
+        ),
+      );
+      return;
+    }
 
     if (_harvestDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -115,9 +346,21 @@ class _ProducerCreateProductViewState
       return;
     }
 
+    if (_imageBase64 == null || _imageBase64!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Debes seleccionar o tomar una foto del producto'),
+        ),
+      );
+      return;
+    }
+
     final userController = Provider.of<UserController>(context, listen: false);
     final productController =
     Provider.of<ProductController>(context, listen: false);
+    final coinController =
+    Provider.of<CoinMovementController>(context, listen: false);
 
     final currentUser = userController.currentUser;
 
@@ -144,40 +387,104 @@ class _ProducerCreateProductViewState
       return;
     }
 
-    final newProduct = ProductModel(
-      id: null,
-      name: _nameController.text.trim(),
-      picture: _normalizeOptionalText(_imageController.text),
-      description: _normalizeOptionalText(_descriptionController.text),
-      price: price,
-      unit: _selectedUnit,
-      stock: stock,
-      state: _selectedStatus == 'Activo' ? 1 : 0,
-      harvestDate: _harvestDate,
-      userID: currentUser.id!,
-    );
+    setState(() {
+      _isSubmitting = true;
+    });
 
-    final success = await productController.createProduct(newProduct);
+    try {
+      await coinController.loadCoinData(currentUser.id!);
 
-    if (!mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF4E3426),
-          content: Text('Producto publicado correctamente'),
-        ),
-      );
-      Navigator.pop(context, true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF4E3426),
-          content: Text(
-            productController.errorMessage ?? 'Error al publicar producto',
+      if (!coinController.hasEnoughBalance(1)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF4E3426),
+            content: Text(
+              'No tienes monedas suficientes para publicar este producto',
+            ),
           ),
-        ),
+        );
+        return;
+      }
+
+      final discountSuccess = await coinController.useCoinsForProductPublication(
+        userId: currentUser.id!,
+        amount: 1,
+        productName: _nameController.text.trim(),
       );
+
+      if (!mounted) return;
+
+      if (!discountSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF4E3426),
+            content: Text(
+              coinController.errorMessage ??
+                  'No se pudo descontar la moneda para publicar',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final newProduct = ProductModel(
+        id: null,
+        name: _nameController.text.trim(),
+        picture: _imageBase64,
+        description: _normalizeOptionalText(_descriptionController.text),
+        price: price,
+        unit: _selectedUnit,
+        stock: stock,
+        state: _selectedStatus == 'Activo' ? 1 : 0,
+        harvestDate: _harvestDate,
+        userID: currentUser.id!,
+        // TODO: cuando actualices ProductModel y ProductService,
+        // agrega aquí: familyID: _selectedFamilyId,
+      );
+
+      final success = await productController.createProduct(newProduct);
+
+      if (!mounted) return;
+
+      if (success) {
+        await coinController.loadCoinData(currentUser.id!);
+        await userController.reloadCurrentUser();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF4E3426),
+            content: Text(
+              'Producto publicado correctamente. Se descontó 1 moneda',
+            ),
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        final rollbackSuccess = await userController.updateBalance(1);
+
+        if (rollbackSuccess) {
+          await coinController.loadCoinData(currentUser.id!);
+          await userController.reloadCurrentUser();
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF4E3426),
+            content: Text(
+              rollbackSuccess
+                  ? 'No se pudo publicar el producto. Se revirtió el descuento de 1 moneda.'
+                  : (productController.errorMessage ??
+                  'Error al publicar producto'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
@@ -224,19 +531,6 @@ class _ProducerCreateProductViewState
     return null;
   }
 
-  String? _validateImageUrl(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Campo obligatorio';
-    }
-
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
-      return 'Ingresa una URL válida';
-    }
-
-    return null;
-  }
-
   String _formatDate(DateTime? date) {
     if (date == null) return 'Sin fecha seleccionada';
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
@@ -253,6 +547,17 @@ class _ProducerCreateProductViewState
     return _selectedStatus == 'Activo'
         ? const Color(0xFF2E8B57)
         : const Color(0xFF8F8F8F);
+  }
+
+  String _getSelectedFamilyName() {
+    if (_selectedFamilyId == null) return 'Familia pendiente';
+
+    final family = _families.cast<ProductFamilyModel?>().firstWhere(
+          (item) => item?.id == _selectedFamilyId,
+      orElse: () => null,
+    );
+
+    return family?.name ?? 'Familia pendiente';
   }
 
   Widget _buildInputCard({
@@ -423,6 +728,311 @@ class _ProducerCreateProductViewState
     );
   }
 
+  Widget _buildFamilyDropdownCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFieldHeader(
+            title: 'Familia del producto',
+            icon: Icons.category_outlined,
+          ),
+          const SizedBox(height: 14),
+          if (_isLoadingFamilies)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: CircularProgressIndicator(
+                  color: Color(0xFFC69A5B),
+                ),
+              ),
+            )
+          else
+            DropdownButtonFormField<int>(
+              value: _selectedFamilyId,
+              items: _families
+                  .map(
+                    (family) => DropdownMenuItem<int>(
+                  value: family.id,
+                  child: Text(family.name),
+                ),
+              )
+                  .toList(),
+              onChanged: _families.isEmpty
+                  ? null
+                  : (value) {
+                setState(() {
+                  _selectedFamilyId = value;
+                });
+              },
+              validator: (value) => value == null ? 'Campo obligatorio' : null,
+              icon: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: Color(0xFF8A6A45),
+              ),
+              dropdownColor: Colors.white,
+              decoration: InputDecoration(
+                hintText: _families.isEmpty
+                    ? 'No hay familias disponibles'
+                    : 'Selecciona una familia',
+                hintStyle: const TextStyle(
+                  color: Color(0xFFAA9B8A),
+                  fontSize: 13,
+                ),
+                filled: true,
+                fillColor: const Color(0xFFF8F5EF),
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Color(0xFFE6DDCF)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Color(0xFFE6DDCF)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFC69A5B),
+                    width: 1.4,
+                  ),
+                ),
+              ),
+              style: const TextStyle(
+                color: Color(0xFF4E3426),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImagePickerCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFieldHeader(
+            title: 'Foto del producto',
+            icon: Icons.photo_camera_back_outlined,
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Selecciona una foto desde la galería o toma una con tu cámara.',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF8C7B6B),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: _selectedImageFile != null
+                ? ClipRRect(
+              key: const ValueKey('image_selected'),
+              borderRadius: BorderRadius.circular(18),
+              child: Image.file(
+                _selectedImageFile!,
+                width: double.infinity,
+                height: 220,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: double.infinity,
+                    height: 220,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8F5EF),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: 42,
+                        color: Color(0xFF8A6A45),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            )
+                : Container(
+              key: const ValueKey('image_placeholder'),
+              width: double.infinity,
+              height: 180,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F5EF),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE6DDCF)),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.image_outlined,
+                    size: 42,
+                    color: Color(0xFFC69A5B),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'Aún no seleccionaste una imagen',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF8C7B6B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isPickingImage ? null : _showImageSourceSheet,
+                  icon: _isPickingImage
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.white,
+                    ),
+                  )
+                      : const Icon(Icons.add_a_photo_outlined, size: 18),
+                  label: Text(
+                    _selectedImageFile == null
+                        ? 'Elegir foto'
+                        : 'Cambiar foto',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC69A5B),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              if (_selectedImageFile != null) ...[
+                const SizedBox(width: 10),
+                OutlinedButton(
+                  onPressed: _isPickingImage ? null : _clearSelectedImage,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFD96C2F),
+                    side: const BorderSide(color: Color(0xFFE6DDCF)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text('Quitar'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageSourceOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color iconColor = const Color(0xFFC69A5B),
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBF8F3),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE9DFD1)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF4E3426),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF8C7B6B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFieldHeader({
     required String title,
     required IconData icon,
@@ -461,7 +1071,7 @@ class _ProducerCreateProductViewState
     return Row(
       children: [
         IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSubmitting ? null : () => Navigator.pop(context),
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             color: Color(0xFF5A3E2B),
@@ -620,7 +1230,7 @@ class _ProducerCreateProductViewState
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Completa los datos, imagen, stock y fecha de cosecha para que tu publicación se vea más profesional.',
+                  'Completa los datos, fotografía real, familia, stock y fecha de cosecha para que tu publicación se vea más profesional.',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -633,14 +1243,14 @@ class _ProducerCreateProductViewState
                     Expanded(
                       child: _buildHeroMiniStat(
                         icon: Icons.photo_camera_back_outlined,
-                        label: 'Imagen',
+                        label: 'Foto',
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: _buildHeroMiniStat(
-                        icon: Icons.payments_outlined,
-                        label: 'Precio',
+                        icon: Icons.category_outlined,
+                        label: 'Familia',
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -720,8 +1330,8 @@ class _ProducerCreateProductViewState
         Expanded(
           child: _buildTipCard(
             icon: Icons.image_outlined,
-            title: 'Usa buena imagen',
-            subtitle: 'Hace más atractiva la publicación',
+            title: 'Usa foto real',
+            subtitle: 'Da más confianza al comprador',
           ),
         ),
         const SizedBox(width: 12),
@@ -1006,7 +1616,7 @@ class _ProducerCreateProductViewState
   }
 
   Widget _buildPreviewCard() {
-    final hasImage = _imageController.text.trim().isNotEmpty;
+    final hasImage = _selectedImageFile != null;
 
     return Container(
       margin: const EdgeInsets.only(top: 4),
@@ -1065,9 +1675,10 @@ class _ProducerCreateProductViewState
                     child: hasImage
                         ? ClipRRect(
                       borderRadius: BorderRadius.circular(20),
-                      child: Image.network(
-                        _imageController.text.trim(),
+                      child: Image.file(
+                        _selectedImageFile!,
                         fit: BoxFit.cover,
+                        gaplessPlayback: true,
                         errorBuilder: (context, error, stackTrace) {
                           return const Icon(
                             Icons.image_not_supported_outlined,
@@ -1141,6 +1752,12 @@ class _ProducerCreateProductViewState
                         ),
                         const SizedBox(height: 10),
                         _buildPreviewInfo(
+                          Icons.category_outlined,
+                          _getSelectedFamilyName(),
+                          const Color(0xFF8A6A45),
+                        ),
+                        const SizedBox(height: 6),
+                        _buildPreviewInfo(
                           Icons.monetization_on_outlined,
                           _priceController.text.trim().isEmpty
                               ? 'Precio pendiente'
@@ -1205,11 +1822,14 @@ class _ProducerCreateProductViewState
   Widget _buildPublishButton() {
     return Consumer<ProductController>(
       builder: (context, productController, child) {
+        final isBusy =
+            productController.isLoading || _isSubmitting || _isLoadingFamilies;
+
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: productController.isLoading ? null : _publishProduct,
-            icon: productController.isLoading
+            onPressed: isBusy ? null : _publishProduct,
+            icon: isBusy
                 ? const SizedBox(
               width: 18,
               height: 18,
@@ -1220,9 +1840,7 @@ class _ProducerCreateProductViewState
             )
                 : const Icon(Icons.publish_rounded),
             label: Text(
-              productController.isLoading
-                  ? 'Publicando...'
-                  : 'Publicar producto',
+              isBusy ? 'Publicando...' : 'Publicar producto',
               style: const TextStyle(
                 fontSize: 15.5,
                 fontWeight: FontWeight.w700,
@@ -1356,6 +1974,7 @@ class _ProducerCreateProductViewState
                                     ),
                                   ],
                                 ),
+                                _buildFamilyDropdownCard(),
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1405,6 +2024,7 @@ class _ProducerCreateProductViewState
                                     });
                                   },
                                 ),
+                                _buildFamilyDropdownCard(),
                                 _buildInputCard(
                                   title: 'Precio',
                                   hint: 'Ej. 4.5',
@@ -1434,13 +2054,7 @@ class _ProducerCreateProductViewState
                                 icon: Icons.notes_rounded,
                                 maxLines: 4,
                               ),
-                              _buildInputCard(
-                                title: 'URL de la imagen',
-                                hint: 'https://...',
-                                controller: _imageController,
-                                icon: Icons.image_outlined,
-                                customValidator: _validateImageUrl,
-                              ),
+                              _buildImagePickerCard(),
                               _buildDateCard(),
                               _buildPreviewCard(),
                               const SizedBox(height: 22),
