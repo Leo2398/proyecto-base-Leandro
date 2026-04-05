@@ -229,20 +229,19 @@ class _AdminCoinRechargeViewState extends State<AdminCoinRechargeView> {
                 ]),
               ),
               const Divider(height: 1),
-              Flexible(
-                child: SingleChildScrollView(
-                  child: ClipRRect(
-                    borderRadius:
-                        const BorderRadius.vertical(bottom: Radius.circular(16)),
-                    child: AppImage(
-                      src: image,
-                      width: double.infinity,
-                      fit: BoxFit.contain,
-                      placeholder: const Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Icon(Icons.broken_image_outlined,
-                            size: 48, color: Colors.grey),
-                      ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AppImage(
+                    src: image,
+                    width: double.infinity,
+                    height: 420,
+                    fit: BoxFit.contain,
+                    placeholder: const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Icon(Icons.broken_image_outlined,
+                          size: 48, color: Colors.grey),
                     ),
                   ),
                 ),
