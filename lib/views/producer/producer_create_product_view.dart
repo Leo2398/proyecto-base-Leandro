@@ -1,12 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/product_controller.dart';
 import '../../controllers/user_controller.dart';
-import '../../core/image_helper.dart';
 import '../../models/product_model.dart';
 
 class ProducerCreateProductView extends StatefulWidget {
@@ -25,14 +21,10 @@ class _ProducerCreateProductViewState
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _stockController = TextEditingController();
-
-  // ── Imagen ──────────────────────────────────────────────────────────────────
-  File? _selectedImage;        // archivo local elegido por el usuario
-  String? _uploadedImageUrl;   // URL de Cloudinary → se guarda en la BD
-  bool _isUploadingImage = false;
-  // ────────────────────────────────────────────────────────────────────────────
+  final TextEditingController _imageController = TextEditingController();
 
   DateTime? _harvestDate;
+
   String? _selectedUnit;
   String _selectedStatus = 'Activo';
 
@@ -48,127 +40,37 @@ class _ProducerCreateProductViewState
   @override
   void initState() {
     super.initState();
+
     _nameController.addListener(_refreshPreview);
     _descriptionController.addListener(_refreshPreview);
     _priceController.addListener(_refreshPreview);
     _stockController.addListener(_refreshPreview);
+    _imageController.addListener(_refreshPreview);
+
     _selectedUnit = _units.first;
   }
 
   void _refreshPreview() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   void dispose() {
-    _nameController
-      ..removeListener(_refreshPreview)
-      ..dispose();
-    _descriptionController
-      ..removeListener(_refreshPreview)
-      ..dispose();
-    _priceController
-      ..removeListener(_refreshPreview)
-      ..dispose();
-    _stockController
-      ..removeListener(_refreshPreview)
-      ..dispose();
+    _nameController.removeListener(_refreshPreview);
+    _descriptionController.removeListener(_refreshPreview);
+    _priceController.removeListener(_refreshPreview);
+    _stockController.removeListener(_refreshPreview);
+    _imageController.removeListener(_refreshPreview);
+
+    _nameController.dispose();
+    _descriptionController.dispose();
+    _priceController.dispose();
+    _stockController.dispose();
+    _imageController.dispose();
     super.dispose();
   }
-
-  // ── Imagen: elegir y subir ──────────────────────────────────────────────────
-
-  Future<void> _pickAndUploadImage() async {
-    // Pregunta si galería o cámara
-    final source = await _showImageSourceDialog();
-    if (source == null) return;
-
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 80);
-    if (picked == null) return;
-
-    setState(() {
-      _selectedImage = File(picked.path);
-      _isUploadingImage = true;
-      _uploadedImageUrl = null;
-    });
-
-   final url = await ImageHelper.toBase64(_selectedImage!);
-
-    if (!mounted) return;
-    setState(() {
-      _isUploadingImage = false;
-      _uploadedImageUrl = url;
-    });
-
-    if (url == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF4E3426),
-          content: Text('Error al subir la imagen. Intenta de nuevo.'),
-        ),
-      );
-    }
-  }
-
-  Future<ImageSource?> _showImageSourceDialog() async {
-    return showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0D8CE),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              const Text(
-                'Seleccionar imagen',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF4E3426),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFF5F0E8),
-                  child: Icon(Icons.photo_library_outlined,
-                      color: Color(0xFFC69A5B)),
-                ),
-                title: const Text('Galería de fotos'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFF5F0E8),
-                  child: Icon(Icons.camera_alt_outlined,
-                      color: Color(0xFFC69A5B)),
-                ),
-                title: const Text('Cámara'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Fecha ───────────────────────────────────────────────────────────────────
 
   Future<void> _selectDate() async {
     final date = await showDatePicker(
@@ -176,58 +78,76 @@ class _ProducerCreateProductViewState
       initialDate: _harvestDate ?? DateTime.now(),
       firstDate: DateTime(2023),
       lastDate: DateTime(2030),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFFC69A5B),
-            onPrimary: Colors.white,
-            surface: Colors.white,
-            onSurface: Color(0xFF4E3426),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFFC69A5B),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF4E3426),
+            ),
           ),
-        ),
-        child: child!,
-      ),
+          child: child!,
+        );
+      },
     );
-    if (date != null && mounted) setState(() => _harvestDate = date);
-  }
 
-  // ── Publicar ────────────────────────────────────────────────────────────────
+    if (date != null && mounted) {
+      setState(() {
+        _harvestDate = date;
+      });
+    }
+  }
 
   Future<void> _publishProduct() async {
     FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_harvestDate == null) {
-      _showSnack('Selecciona la fecha de cosecha');
-      return;
-    }
-
-    if (_uploadedImageUrl == null) {
-      _showSnack('Selecciona una foto del producto');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Selecciona la fecha de cosecha'),
+        ),
+      );
       return;
     }
 
     final userController = Provider.of<UserController>(context, listen: false);
     final productController =
-        Provider.of<ProductController>(context, listen: false);
+    Provider.of<ProductController>(context, listen: false);
 
     final currentUser = userController.currentUser;
+
     if (currentUser == null || currentUser.id == null) {
-      _showSnack('No hay un productor logueado');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('No hay un productor logueado'),
+        ),
+      );
       return;
     }
 
     final price = double.tryParse(_priceController.text.trim());
     final stock = int.tryParse(_stockController.text.trim());
+
     if (price == null || stock == null) {
-      _showSnack('Verifica el precio y el stock');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Verifica el precio y el stock'),
+        ),
+      );
       return;
     }
 
     final newProduct = ProductModel(
       id: null,
       name: _nameController.text.trim(),
-      picture: _uploadedImageUrl, // ← URL de Cloudinary → se guarda en BD
+      picture: _normalizeOptionalText(_imageController.text),
       description: _normalizeOptionalText(_descriptionController.text),
       price: price,
       unit: _selectedUnit,
@@ -238,26 +158,28 @@ class _ProducerCreateProductViewState
     );
 
     final success = await productController.createProduct(newProduct);
+
     if (!mounted) return;
 
     if (success) {
-      _showSnack('Producto publicado correctamente');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Producto publicado correctamente'),
+        ),
+      );
       Navigator.pop(context, true);
     } else {
-      _showSnack(productController.errorMessage ?? 'Error al publicar producto');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF4E3426),
+          content: Text(
+            productController.errorMessage ?? 'Error al publicar producto',
+          ),
+        ),
+      );
     }
   }
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF4E3426),
-        content: Text(message),
-      ),
-    );
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────────────────────
 
   String? _normalizeOptionalText(String? value) {
     if (value == null) return null;
@@ -265,30 +187,59 @@ class _ProducerCreateProductViewState
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  String? _validateRequired(String? value) =>
-      (value == null || value.trim().isEmpty) ? 'Campo obligatorio' : null;
+  String? _validateRequired(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Campo obligatorio';
+    }
+    return null;
+  }
 
   String? _validatePrice(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Campo obligatorio';
+    if (value == null || value.trim().isEmpty) {
+      return 'Campo obligatorio';
+    }
+
     final parsed = double.tryParse(value.trim());
-    if (parsed == null) return 'Ingresa un precio válido';
-    if (parsed <= 0) return 'El precio debe ser mayor a 0';
+    if (parsed == null) {
+      return 'Ingresa un precio válido';
+    }
+    if (parsed <= 0) {
+      return 'El precio debe ser mayor a 0';
+    }
     return null;
   }
 
   String? _validateStock(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Campo obligatorio';
+    if (value == null || value.trim().isEmpty) {
+      return 'Campo obligatorio';
+    }
+
     final parsed = int.tryParse(value.trim());
-    if (parsed == null) return 'Ingresa un stock válido';
-    if (parsed < 0) return 'El stock no puede ser negativo';
+    if (parsed == null) {
+      return 'Ingresa un stock válido';
+    }
+    if (parsed < 0) {
+      return 'El stock no puede ser negativo';
+    }
+    return null;
+  }
+
+  String? _validateImageUrl(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Campo obligatorio';
+    }
+
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+      return 'Ingresa una URL válida';
+    }
+
     return null;
   }
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Sin fecha seleccionada';
-    return '${date.day.toString().padLeft(2, '0')}/'
-        '${date.month.toString().padLeft(2, '0')}/'
-        '${date.year}';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
   double _getMaxContentWidth(double screenWidth) {
@@ -298,40 +249,22 @@ class _ProducerCreateProductViewState
     return screenWidth;
   }
 
-  Color _getStatusColor() => _selectedStatus == 'Activo'
-      ? const Color(0xFF2E8B57)
-      : const Color(0xFF8F8F8F);
-
-  // ── Widgets de campo ────────────────────────────────────────────────────────
-
-  Widget _buildFieldHeader({required String title, required IconData icon}) {
-    return Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5F0E8),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: const Color(0xFFC69A5B), size: 20),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF4E3426),
-            ),
-          ),
-        ),
-      ],
-    );
+  Color _getStatusColor() {
+    return _selectedStatus == 'Activo'
+        ? const Color(0xFF2E8B57)
+        : const Color(0xFF8F8F8F);
   }
 
-  Widget _buildCard({required Widget child}) {
+  Widget _buildInputCard({
+    required String title,
+    required String hint,
+    required TextEditingController controller,
+    required IconData icon,
+    TextInputType type = TextInputType.text,
+    int maxLines = 1,
+    String? suffixText,
+    String? Function(String?)? customValidator,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -347,21 +280,6 @@ class _ProducerCreateProductViewState
           ),
         ],
       ),
-      child: child,
-    );
-  }
-
-  Widget _buildInputCard({
-    required String title,
-    required String hint,
-    required TextEditingController controller,
-    required IconData icon,
-    TextInputType type = TextInputType.text,
-    int maxLines = 1,
-    String? suffixText,
-    String? Function(String?)? customValidator,
-  }) {
-    return _buildCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -378,8 +296,10 @@ class _ProducerCreateProductViewState
             ),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle:
-                  const TextStyle(color: Color(0xFFAA9B8A), fontSize: 13),
+              hintStyle: const TextStyle(
+                color: Color(0xFFAA9B8A),
+                fontSize: 13,
+              ),
               suffixText: suffixText,
               suffixStyle: const TextStyle(
                 color: Color(0xFF8A6A45),
@@ -401,17 +321,23 @@ class _ProducerCreateProductViewState
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide:
-                    const BorderSide(color: Color(0xFFC69A5B), width: 1.4),
+                borderSide: const BorderSide(
+                  color: Color(0xFFC69A5B),
+                  width: 1.4,
+                ),
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: Color(0xFFD96C2F)),
+                borderSide: const BorderSide(
+                  color: Color(0xFFD96C2F),
+                ),
               ),
               focusedErrorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide:
-                    const BorderSide(color: Color(0xFFD96C2F), width: 1.4),
+                borderSide: const BorderSide(
+                  color: Color(0xFFD96C2F),
+                  width: 1.4,
+                ),
               ),
             ),
           ),
@@ -427,7 +353,21 @@ class _ProducerCreateProductViewState
     required List<String> items,
     required void Function(String?) onChanged,
   }) {
-    return _buildCard(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -436,20 +376,26 @@ class _ProducerCreateProductViewState
           DropdownButtonFormField<String>(
             value: value,
             items: items
-                .map((item) =>
-                    DropdownMenuItem(value: item, child: Text(item)))
+                .map(
+                  (item) => DropdownMenuItem<String>(
+                value: item,
+                child: Text(item),
+              ),
+            )
                 .toList(),
             onChanged: onChanged,
-            validator: (v) =>
-                v == null || v.isEmpty ? 'Campo obligatorio' : null,
-            icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                color: Color(0xFF8A6A45)),
+            validator: (value) =>
+            value == null || value.isEmpty ? 'Campo obligatorio' : null,
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF8A6A45),
+            ),
             dropdownColor: Colors.white,
             decoration: InputDecoration(
               filled: true,
               fillColor: const Color(0xFFF8F5EF),
               contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: const BorderSide(color: Color(0xFFE6DDCF)),
@@ -460,8 +406,10 @@ class _ProducerCreateProductViewState
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide:
-                    const BorderSide(color: Color(0xFFC69A5B), width: 1.4),
+                borderSide: const BorderSide(
+                  color: Color(0xFFC69A5B),
+                  width: 1.4,
+                ),
               ),
             ),
             style: const TextStyle(
@@ -475,158 +423,397 @@ class _ProducerCreateProductViewState
     );
   }
 
-  // ── Image Picker Card ───────────────────────────────────────────────────────
-
-  Widget _buildImagePickerCard() {
-    return _buildCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildFieldHeader(
-            title: 'Foto del producto',
-            icon: Icons.image_outlined,
-          ),
-          const SizedBox(height: 14),
-          GestureDetector(
-            onTap: _isUploadingImage ? null : _pickAndUploadImage,
-            child: Container(
-              height: 180,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F5EF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _uploadedImageUrl != null
-                      ? const Color(0xFF2E8B57)
-                      : const Color(0xFFE6DDCF),
-                  width: _uploadedImageUrl != null ? 1.5 : 1,
-                ),
-              ),
-              child: _buildImageContent(),
-            ),
-          ),
-          if (_uploadedImageUrl != null) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.check_circle,
-                    color: Color(0xFF2E8B57), size: 16),
-                const SizedBox(width: 6),
-                const Expanded(
-                  child: Text(
-                    'Imagen subida correctamente',
-                    style: TextStyle(
-                      color: Color(0xFF2E8B57),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: _isUploadingImage ? null : _pickAndUploadImage,
-                  icon: const Icon(Icons.swap_horiz_rounded, size: 16),
-                  label: const Text('Cambiar'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFC69A5B),
-                    textStyle: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-          if (_uploadedImageUrl == null && !_isUploadingImage) ...[
-            const SizedBox(height: 8),
-            const Text(
-              '* La foto es obligatoria para publicar el producto',
-              style: TextStyle(
-                color: Color(0xFFAA9B8A),
-                fontSize: 11.5,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImageContent() {
-    // Subiendo
-    if (_isUploadingImage) {
-      return const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            color: Color(0xFFC69A5B),
-            strokeWidth: 2.5,
-          ),
-          SizedBox(height: 12),
-          Text(
-            'Subiendo imagen...',
-            style: TextStyle(
-              color: Color(0xFF8A6A45),
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-        ],
-      );
-    }
-
-    // Imagen seleccionada (muestra preview local)
-    if (_selectedImage != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: Image.file(
-          _selectedImage!,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-        ),
-      );
-    }
-
-    // Sin imagen
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+  Widget _buildFieldHeader({
+    required String title,
+    required IconData icon,
+  }) {
+    return Row(
       children: [
         Container(
-          width: 64,
-          height: 64,
+          width: 38,
+          height: 38,
           decoration: BoxDecoration(
-            color: const Color(0xFFF0EBE0),
-            borderRadius: BorderRadius.circular(20),
+            color: const Color(0xFFF5F0E8),
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(
-            Icons.add_photo_alternate_outlined,
-            size: 34,
-            color: Color(0xFFC69A5B),
-          ),
-        ),
-        const SizedBox(height: 12),
-        const Text(
-          'Toca para elegir una foto',
-          style: TextStyle(
-            color: Color(0xFF8A6A45),
-            fontWeight: FontWeight.w700,
-            fontSize: 14,
+          child: Icon(
+            icon,
+            color: const Color(0xFFC69A5B),
+            size: 20,
           ),
         ),
-        const SizedBox(height: 4),
-        const Text(
-          'Galería o cámara',
-          style: TextStyle(color: Color(0xFFAA9B8A), fontSize: 12),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF4E3426),
+            ),
+          ),
         ),
       ],
     );
   }
 
-  // ── Date Card ───────────────────────────────────────────────────────────────
+  Widget _buildTopBar() {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Color(0xFF5A3E2B),
+            size: 20,
+          ),
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.white,
+            padding: const EdgeInsets.all(10),
+            elevation: 2,
+            shadowColor: Colors.black.withOpacity(0.08),
+          ),
+        ),
+        const SizedBox(width: 10),
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Publicar producto',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4E3426),
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                'Crea un nuevo producto para tu catálogo',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF8C7B6B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+              ),
+            ],
+          ),
+          child: const Row(
+            children: [
+              Icon(
+                Icons.storefront_outlined,
+                color: Color(0xFFC7942E),
+                size: 18,
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Nuevo',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF4E3426),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeroBanner() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFD6CCBE),
+            Color(0xFFC8B9A7),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: -20,
+            right: -8,
+            child: Container(
+              width: 125,
+              height: 125,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -22,
+            left: -12,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              color: Colors.black.withOpacity(0.03),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildBannerChip(
+                      Icons.eco_outlined,
+                      'Producto orgánico',
+                    ),
+                    _buildBannerChip(
+                      Icons.inventory_2_outlined,
+                      'Catálogo del productor',
+                    ),
+                    _buildBannerChip(
+                      Icons.auto_awesome_outlined,
+                      'Publicación premium',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Agrega un producto atractivo',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Completa los datos, imagen, stock y fecha de cosecha para que tu publicación se vea más profesional.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildHeroMiniStat(
+                        icon: Icons.photo_camera_back_outlined,
+                        label: 'Imagen',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildHeroMiniStat(
+                        icon: Icons.payments_outlined,
+                        label: 'Precio',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildHeroMiniStat(
+                        icon: Icons.event_available_outlined,
+                        label: 'Cosecha',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBannerChip(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 15),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 11.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroMiniStat({
+    required IconData icon,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.16)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: Colors.white, size: 18),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickTips() {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildTipCard(
+            icon: Icons.image_outlined,
+            title: 'Usa buena imagen',
+            subtitle: 'Hace más atractiva la publicación',
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildTipCard(
+            icon: Icons.sell_outlined,
+            title: 'Precio claro',
+            subtitle: 'Ayuda a vender más rápido',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTipCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFF0E8DC)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5F0E8),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              icon,
+              color: const Color(0xFFC69A5B),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF4E3426),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF8C7B6B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildDateCard() {
-    return _buildCard(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -670,7 +857,9 @@ class _ProducerCreateProductViewState
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -684,11 +873,24 @@ class _ProducerCreateProductViewState
     );
   }
 
-  // ── Status Card ─────────────────────────────────────────────────────────────
-
   Widget _buildStatusCard() {
     final statusColor = _getStatusColor();
-    return _buildCard(
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -700,22 +902,25 @@ class _ProducerCreateProductViewState
           Row(
             children: [
               Expanded(
-                  child: _buildSelectableStatus(
-                      label: 'Activo',
-                      value: 'Activo',
-                      color: const Color(0xFF2E8B57))),
+                child: _buildSelectableStatus(
+                  label: 'Activo',
+                  value: 'Activo',
+                  color: const Color(0xFF2E8B57),
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child: _buildSelectableStatus(
-                      label: 'Pausado',
-                      value: 'Pausado',
-                      color: const Color(0xFF8F8F8F))),
+                child: _buildSelectableStatus(
+                  label: 'Pausado',
+                  value: 'Pausado',
+                  color: const Color(0xFF8F8F8F),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: statusColor.withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
@@ -757,20 +962,23 @@ class _ProducerCreateProductViewState
     required Color color,
   }) {
     final selected = _selectedStatus == value;
+
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => setState(() => _selectedStatus = value),
+      onTap: () {
+        setState(() {
+          _selectedStatus = value;
+        });
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          color: selected
-              ? color.withOpacity(0.12)
-              : const Color(0xFFF8F5EF),
+          color: selected ? color.withOpacity(0.12) : const Color(0xFFF8F5EF),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: selected ? color : const Color(0xFFE6DDCF)),
+            color: selected ? color : const Color(0xFFE6DDCF),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -786,8 +994,7 @@ class _ProducerCreateProductViewState
             Text(
               label,
               style: TextStyle(
-                color:
-                    selected ? color : const Color(0xFF5A3E2B),
+                color: selected ? color : const Color(0xFF5A3E2B),
                 fontWeight: FontWeight.w700,
                 fontSize: 13,
               ),
@@ -798,9 +1005,9 @@ class _ProducerCreateProductViewState
     );
   }
 
-  // ── Preview Card ────────────────────────────────────────────────────────────
-
   Widget _buildPreviewCard() {
+    final hasImage = _imageController.text.trim().isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -820,8 +1027,11 @@ class _ProducerCreateProductViewState
         children: [
           const Row(
             children: [
-              Icon(Icons.visibility_outlined,
-                  color: Color(0xFFC69A5B), size: 20),
+              Icon(
+                Icons.visibility_outlined,
+                color: Color(0xFFC69A5B),
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'Vista previa rápida',
@@ -845,7 +1055,6 @@ class _ProducerCreateProductViewState
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Imagen preview: muestra el archivo local si existe
                   Container(
                     width: 96,
                     height: 96,
@@ -853,19 +1062,26 @@ class _ProducerCreateProductViewState
                       color: const Color(0xFFF5F0E8),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: _selectedImage != null
+                    child: hasImage
                         ? ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: Image.file(
-                              _selectedImage!,
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.inventory_2_outlined,
-                            color: Color(0xFFC69A5B),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.network(
+                        _imageController.text.trim(),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: Color(0xFF888888),
                             size: 38,
-                          ),
+                          );
+                        },
+                      ),
+                    )
+                        : const Icon(
+                      Icons.inventory_2_outlined,
+                      color: Color(0xFFC69A5B),
+                      size: 38,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -889,13 +1105,15 @@ class _ProducerCreateProductViewState
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: _getStatusColor().withOpacity(0.11),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                    color:
-                                        _getStatusColor().withOpacity(0.18)),
+                                  color: _getStatusColor().withOpacity(0.18),
+                                ),
                               ),
                               child: Text(
                                 _selectedStatus,
@@ -939,6 +1157,14 @@ class _ProducerCreateProductViewState
                         ),
                         const SizedBox(height: 6),
                         _buildPreviewInfo(
+                          Icons.straighten_rounded,
+                          _selectedUnit == null
+                              ? 'Unidad pendiente'
+                              : 'Unidad: $_selectedUnit',
+                          const Color(0xFF2E8B57),
+                        ),
+                        const SizedBox(height: 6),
+                        _buildPreviewInfo(
                           Icons.calendar_month_outlined,
                           _harvestDate == null
                               ? 'Fecha de cosecha pendiente'
@@ -976,73 +1202,31 @@ class _ProducerCreateProductViewState
     );
   }
 
-  // ── Top bar y banner (sin cambios) ──────────────────────────────────────────
-
-  Widget _buildTopBar() {
-    return Row(
-      children: [
-        IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Color(0xFF5A3E2B), size: 20),
-          style: IconButton.styleFrom(
-            backgroundColor: Colors.white,
-            padding: const EdgeInsets.all(10),
-            elevation: 2,
-            shadowColor: Colors.black.withOpacity(0.08),
-          ),
-        ),
-        const SizedBox(width: 10),
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Publicar producto',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF4E3426),
-                ),
-              ),
-              SizedBox(height: 2),
-              Text(
-                'Crea un nuevo producto para tu catálogo',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF8C7B6B),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Publish Button ──────────────────────────────────────────────────────────
-
   Widget _buildPublishButton() {
     return Consumer<ProductController>(
-      builder: (context, productController, _) {
-        final isDisabled = productController.isLoading || _isUploadingImage;
+      builder: (context, productController, child) {
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: isDisabled ? null : _publishProduct,
-            icon: isDisabled
+            onPressed: productController.isLoading ? null : _publishProduct,
+            icon: productController.isLoading
                 ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.2, color: Colors.white),
-                  )
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: Colors.white,
+              ),
+            )
                 : const Icon(Icons.publish_rounded),
             label: Text(
-              isDisabled ? 'Procesando...' : 'Publicar producto',
+              productController.isLoading
+                  ? 'Publicando...'
+                  : 'Publicar producto',
               style: const TextStyle(
-                  fontSize: 15.5, fontWeight: FontWeight.w700),
+                fontSize: 15.5,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFC69A5B),
@@ -1059,8 +1243,6 @@ class _ProducerCreateProductViewState
       },
     );
   }
-
-  // ── Build ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -1084,6 +1266,7 @@ class _ProducerCreateProductViewState
         ),
         child: SafeArea(
           child: SingleChildScrollView(
+            padding: EdgeInsets.zero,
             child: Center(
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: maxContentWidth),
@@ -1096,10 +1279,13 @@ class _ProducerCreateProductViewState
                       children: [
                         _buildTopBar(),
                         const SizedBox(height: 18),
+                        _buildHeroBanner(),
+                        const SizedBox(height: 18),
+                        _buildQuickTips(),
+                        const SizedBox(height: 18),
                         Container(
                           width: double.infinity,
-                          padding:
-                              const EdgeInsets.fromLTRB(16, 18, 16, 22),
+                          padding: const EdgeInsets.fromLTRB(16, 18, 16, 22),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.92),
                             borderRadius: BorderRadius.circular(30),
@@ -1116,8 +1302,11 @@ class _ProducerCreateProductViewState
                             children: [
                               const Row(
                                 children: [
-                                  Icon(Icons.edit_note_rounded,
-                                      color: Color(0xFFC69A5B), size: 22),
+                                  Icon(
+                                    Icons.edit_note_rounded,
+                                    color: Color(0xFFC69A5B),
+                                    size: 22,
+                                  ),
                                   SizedBox(width: 8),
                                   Text(
                                     'Información del producto',
@@ -1129,19 +1318,26 @@ class _ProducerCreateProductViewState
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Completa cada campo para que tu publicación se vea clara, atractiva y profesional.',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  color: Color(0xFF8C7B6B),
+                                  height: 1.35,
+                                ),
+                              ),
                               const SizedBox(height: 18),
                               if (isWide) ...[
                                 Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
                                       child: _buildInputCard(
                                         title: 'Nombre del producto',
                                         hint: 'Ej. Tomate Cherry Orgánico',
                                         controller: _nameController,
-                                        icon:
-                                            Icons.shopping_basket_outlined,
+                                        icon: Icons.shopping_basket_outlined,
                                       ),
                                     ),
                                     const SizedBox(width: 14),
@@ -1151,15 +1347,17 @@ class _ProducerCreateProductViewState
                                         icon: Icons.straighten_rounded,
                                         value: _selectedUnit!,
                                         items: _units,
-                                        onChanged: (v) => setState(
-                                            () => _selectedUnit = v),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _selectedUnit = value;
+                                          });
+                                        },
                                       ),
                                     ),
                                   ],
                                 ),
                                 Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
                                       child: _buildInputCard(
@@ -1167,9 +1365,10 @@ class _ProducerCreateProductViewState
                                         hint: 'Ej. 4.5',
                                         controller: _priceController,
                                         icon: Icons.attach_money_rounded,
-                                        type: const TextInputType
-                                            .numberWithOptions(
-                                            decimal: true),
+                                        type:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
                                         suffixText: 'monedas',
                                         customValidator: _validatePrice,
                                       ),
@@ -1200,16 +1399,20 @@ class _ProducerCreateProductViewState
                                   icon: Icons.straighten_rounded,
                                   value: _selectedUnit!,
                                   items: _units,
-                                  onChanged: (v) =>
-                                      setState(() => _selectedUnit = v),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _selectedUnit = value;
+                                    });
+                                  },
                                 ),
                                 _buildInputCard(
                                   title: 'Precio',
                                   hint: 'Ej. 4.5',
                                   controller: _priceController,
                                   icon: Icons.attach_money_rounded,
-                                  type: const TextInputType
-                                      .numberWithOptions(decimal: true),
+                                  type: const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                                   suffixText: 'monedas',
                                   customValidator: _validatePrice,
                                 ),
@@ -1226,13 +1429,18 @@ class _ProducerCreateProductViewState
                               _buildInputCard(
                                 title: 'Descripción',
                                 hint:
-                                    'Describe el producto, calidad, uso o beneficio principal',
+                                'Describe el producto, calidad, uso o beneficio principal',
                                 controller: _descriptionController,
                                 icon: Icons.notes_rounded,
                                 maxLines: 4,
                               ),
-                              // ← AQUÍ: picker en lugar del campo URL
-                              _buildImagePickerCard(),
+                              _buildInputCard(
+                                title: 'URL de la imagen',
+                                hint: 'https://...',
+                                controller: _imageController,
+                                icon: Icons.image_outlined,
+                                customValidator: _validateImageUrl,
+                              ),
                               _buildDateCard(),
                               _buildPreviewCard(),
                               const SizedBox(height: 22),

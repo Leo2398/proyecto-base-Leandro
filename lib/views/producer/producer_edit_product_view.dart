@@ -1,11 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/product_controller.dart';
-import '../../core/image_helper.dart';
 import '../../models/product_model.dart';
 
 class ProducerEditProductView extends StatefulWidget {
@@ -28,13 +24,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _priceController;
   late final TextEditingController _stockController;
-
-  // ── Imagen ──────────────────────────────────────────────────────────────────
-  File? _selectedImage;       // archivo local elegido por el usuario
-  String? _currentImageSrc;   // Base64 actual del producto (de la BD)
-  bool _isUploadingImage = false;
-  bool _imageChanged = false;
-  // ────────────────────────────────────────────────────────────────────────────
+  late final TextEditingController _imageController;
 
   DateTime? _harvestDate;
   String _selectedUnit = 'kg';
@@ -62,9 +52,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
       text: product.price.toStringAsFixed(product.price % 1 == 0 ? 0 : 2),
     );
     _stockController = TextEditingController(text: product.stock.toString());
-
-    // Carga la imagen actual de la BD
-    _currentImageSrc = product.picture;
+    _imageController = TextEditingController(text: product.picture ?? '');
 
     _selectedUnit = (product.unit != null && _units.contains(product.unit))
         ? product.unit!
@@ -77,10 +65,13 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     _descriptionController.addListener(_refresh);
     _priceController.addListener(_refresh);
     _stockController.addListener(_refresh);
+    _imageController.addListener(_refresh);
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
@@ -89,104 +80,15 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     _descriptionController.removeListener(_refresh);
     _priceController.removeListener(_refresh);
     _stockController.removeListener(_refresh);
+    _imageController.removeListener(_refresh);
 
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
     _stockController.dispose();
+    _imageController.dispose();
     super.dispose();
   }
-
-  // ── Imagen ─────────────────────────────────────────────────────────────────
-
-  Future<void> _pickAndUploadImage() async {
-    final source = await _showImageSourceDialog();
-    if (source == null) return;
-
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 80);
-    if (picked == null) return;
-
-    setState(() {
-      _selectedImage = File(picked.path);
-      _isUploadingImage = true;
-      _imageChanged = false;
-    });
-
-    final base64 = await ImageHelper.toBase64(_selectedImage!);
-
-    if (!mounted) return;
-    setState(() {
-      _isUploadingImage = false;
-      if (base64 != null) {
-        _currentImageSrc = base64;
-        _imageChanged = true;
-      }
-    });
-
-    if (base64 == null) {
-      _showSnack('Error al procesar la imagen. Intenta de nuevo.');
-    }
-  }
-
-  Future<ImageSource?> _showImageSourceDialog() {
-    return showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE0D8CE),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              const Text(
-                'Cambiar imagen',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF4E3426),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFF5F0E8),
-                  child: Icon(Icons.photo_library_outlined,
-                      color: Color(0xFFC69A5B)),
-                ),
-                title: const Text('Galería de fotos'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFF5F0E8),
-                  child: Icon(Icons.camera_alt_outlined,
-                      color: Color(0xFFC69A5B)),
-                ),
-                title: const Text('Cámara'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Fecha ──────────────────────────────────────────────────────────────────
 
   Future<void> _selectDate() async {
     final date = await showDatePicker(
@@ -194,34 +96,40 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
       initialDate: _harvestDate ?? DateTime.now(),
       firstDate: DateTime(2023),
       lastDate: DateTime(2030),
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFFC69A5B),
-            onPrimary: Colors.white,
-            surface: Colors.white,
-            onSurface: Color(0xFF4E3426),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFFC69A5B),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF4E3426),
+            ),
           ),
-        ),
-        child: child!,
-      ),
+          child: child!,
+        );
+      },
     );
-    if (date != null && mounted) setState(() => _harvestDate = date);
-  }
 
-  // ── Guardar ────────────────────────────────────────────────────────────────
+    if (date != null && mounted) {
+      setState(() {
+        _harvestDate = date;
+      });
+    }
+  }
 
   Future<void> _saveProduct() async {
     FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_harvestDate == null) {
-      _showSnack('Selecciona la fecha de cosecha');
-      return;
-    }
-
-    if (_currentImageSrc == null || _currentImageSrc!.isEmpty) {
-      _showSnack('El producto debe tener una foto');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Selecciona la fecha de cosecha'),
+        ),
+      );
       return;
     }
 
@@ -229,18 +137,23 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     final stock = int.tryParse(_stockController.text.trim());
 
     if (price == null || stock == null) {
-      _showSnack('Verifica el precio y el stock');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Verifica el precio y el stock'),
+        ),
+      );
       return;
     }
 
     final productController =
-        Provider.of<ProductController>(context, listen: false);
+    Provider.of<ProductController>(context, listen: false);
 
     final updatedProduct = ProductModel(
       id: widget.product.id,
       name: _nameController.text.trim(),
       description: _normalizeOptionalText(_descriptionController.text),
-      picture: _currentImageSrc,
+      picture: _normalizeOptionalText(_imageController.text),
       price: price,
       unit: _selectedUnit,
       stock: stock,
@@ -254,24 +167,24 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     if (!mounted) return;
 
     if (success) {
-      _showSnack('Producto actualizado correctamente');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Producto actualizado correctamente'),
+        ),
+      );
       Navigator.pop(context, true);
     } else {
-      _showSnack(
-          productController.errorMessage ?? 'Error al actualizar producto');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF4E3426),
+          content: Text(
+            productController.errorMessage ?? 'Error al actualizar producto',
+          ),
+        ),
+      );
     }
   }
-
-  void _showSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: const Color(0xFF4E3426),
-        content: Text(message),
-      ),
-    );
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
 
   String? _normalizeOptionalText(String? value) {
     if (value == null) return null;
@@ -279,22 +192,53 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  String? _validateRequired(String? value) =>
-      (value == null || value.trim().isEmpty) ? 'Campo obligatorio' : null;
+  String? _validateRequired(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Campo obligatorio';
+    }
+    return null;
+  }
 
   String? _validatePrice(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Campo obligatorio';
+    if (value == null || value.trim().isEmpty) {
+      return 'Campo obligatorio';
+    }
+
     final parsed = double.tryParse(value.trim());
-    if (parsed == null) return 'Ingresa un precio válido';
-    if (parsed <= 0) return 'El precio debe ser mayor a 0';
+    if (parsed == null) {
+      return 'Ingresa un precio válido';
+    }
+    if (parsed <= 0) {
+      return 'El precio debe ser mayor a 0';
+    }
     return null;
   }
 
   String? _validateStock(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Campo obligatorio';
+    if (value == null || value.trim().isEmpty) {
+      return 'Campo obligatorio';
+    }
+
     final parsed = int.tryParse(value.trim());
-    if (parsed == null) return 'Ingresa un stock válido';
-    if (parsed < 0) return 'El stock no puede ser negativo';
+    if (parsed == null) {
+      return 'Ingresa un stock válido';
+    }
+    if (parsed < 0) {
+      return 'El stock no puede ser negativo';
+    }
+    return null;
+  }
+
+  String? _validateImageUrl(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Campo obligatorio';
+    }
+
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
+      return 'Ingresa una URL válida';
+    }
+
     return null;
   }
 
@@ -307,61 +251,13 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Sin fecha seleccionada';
-    return '${date.day.toString().padLeft(2, '0')}/'
-        '${date.month.toString().padLeft(2, '0')}/${date.year}';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
-  Color _statusColor() => _selectedStatus == 'Activo'
-      ? const Color(0xFF2E8B57)
-      : const Color(0xFF8F8F8F);
-
-  // ── Widgets ────────────────────────────────────────────────────────────────
-
-  Widget _buildFieldHeader({required String title, required IconData icon}) {
-    return Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5F0E8),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: const Color(0xFFC69A5B), size: 20),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF4E3426),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCard({required Widget child}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFCF8),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE8DED0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
-    );
+  Color _statusColor() {
+    return _selectedStatus == 'Activo'
+        ? const Color(0xFF2E8B57)
+        : const Color(0xFF8F8F8F);
   }
 
   Widget _buildTopBar() {
@@ -369,8 +265,11 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
       children: [
         IconButton(
           onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Color(0xFF5A3E2B), size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Color(0xFF5A3E2B),
+            size: 20,
+          ),
           style: IconButton.styleFrom(
             backgroundColor: Colors.white,
             padding: const EdgeInsets.all(10),
@@ -410,17 +309,25 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.05), blurRadius: 10),
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+              ),
             ],
           ),
           child: const Row(
             children: [
-              Icon(Icons.edit_outlined, color: Color(0xFFC7942E), size: 18),
+              Icon(
+                Icons.edit_outlined,
+                color: Color(0xFFC7942E),
+                size: 18,
+              ),
               SizedBox(width: 6),
               Text(
                 'Edición',
                 style: TextStyle(
-                    fontWeight: FontWeight.w700, color: Color(0xFF4E3426)),
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF4E3426),
+                ),
               ),
             ],
           ),
@@ -429,14 +336,17 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     );
   }
 
-  // ── Hero Banner con imagen actual ──────────────────────────────────────────
-
   Widget _buildHeroBanner() {
+    final hasImage = _imageController.text.trim().isNotEmpty;
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
         gradient: const LinearGradient(
-          colors: [Color(0xFFD6CCBE), Color(0xFFC8B9A7)],
+          colors: [
+            Color(0xFFD6CCBE),
+            Color(0xFFC8B9A7),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -484,31 +394,35 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
             ),
             child: Row(
               children: [
-                // Imagen actual del producto
                 Container(
                   width: 104,
                   height: 104,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.24),
                     borderRadius: BorderRadius.circular(22),
-                    border:
-                        Border.all(color: Colors.white.withOpacity(0.18)),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.18),
+                    ),
                   ),
-                  child: ClipRRect(
+                  child: hasImage
+                      ? ClipRRect(
                     borderRadius: BorderRadius.circular(22),
-                    child: _selectedImage != null
-                        ? Image.file(_selectedImage!, fit: BoxFit.cover)
-                        : AppImage(
-                            src: _currentImageSrc,
-                            width: 104,
-                            height: 104,
-                            borderRadius: 22,
-                            placeholder: const Icon(
-                              Icons.inventory_2_outlined,
-                              color: Colors.white,
-                              size: 42,
-                            ),
-                          ),
+                    child: Image.network(
+                      _imageController.text.trim(),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) {
+                        return const Icon(
+                          Icons.image_not_supported_outlined,
+                          color: Colors.white,
+                          size: 40,
+                        );
+                      },
+                    ),
+                  )
+                      : const Icon(
+                    Icons.inventory_2_outlined,
+                    color: Colors.white,
+                    size: 42,
                   ),
                 ),
                 const SizedBox(width: 16),
@@ -521,9 +435,13 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                         runSpacing: 8,
                         children: [
                           _buildBannerChip(
-                              Icons.auto_awesome_outlined, 'Edición premium'),
-                          _buildBannerChip(Icons.inventory_2_outlined,
-                              'Catálogo productor'),
+                            Icons.auto_awesome_outlined,
+                            'Edición premium',
+                          ),
+                          _buildBannerChip(
+                            Icons.inventory_2_outlined,
+                            'Catálogo productor',
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -543,7 +461,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                       const SizedBox(height: 6),
                       Text(
                         _descriptionController.text.trim().isEmpty
-                            ? 'Actualiza la información del producto.'
+                            ? 'Actualiza la información del producto para mantener tu catálogo al día.'
                             : _descriptionController.text.trim(),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -599,17 +517,23 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
         children: [
           Icon(icon, color: Colors.white, size: 15),
           const SizedBox(width: 6),
-          Text(text,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11.5)),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 11.5,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildHeroMiniStat({required IconData icon, required String label}) {
+  Widget _buildHeroMiniStat({
+    required IconData icon,
+    required String label,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
@@ -621,13 +545,16 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
         children: [
           Icon(icon, color: Colors.white, size: 18),
           const SizedBox(height: 6),
-          Text(label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -668,7 +595,9 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
         border: Border.all(color: const Color(0xFFF0E8DC)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04), blurRadius: 10),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+          ),
         ],
       ),
       child: Row(
@@ -680,27 +609,72 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
               color: const Color(0xFFF5F0E8),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: const Color(0xFFC69A5B), size: 20),
+            child: Icon(
+              icon,
+              color: const Color(0xFFC69A5B),
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF4E3426))),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF4E3426),
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(subtitle,
-                    style: const TextStyle(
-                        fontSize: 11.5, color: Color(0xFF8C7B6B))),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: Color(0xFF8C7B6B),
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFieldHeader({
+    required String title,
+    required IconData icon,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5F0E8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: const Color(0xFFC69A5B),
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF4E3426),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -714,7 +688,21 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     String? suffixText,
     String? Function(String?)? customValidator,
   }) {
-    return _buildCard(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -726,14 +714,20 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
             maxLines: maxLines,
             validator: customValidator ?? _validateRequired,
             style: const TextStyle(
-                color: Color(0xFF4E3426), fontWeight: FontWeight.w500),
+              color: Color(0xFF4E3426),
+              fontWeight: FontWeight.w500,
+            ),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle:
-                  const TextStyle(color: Color(0xFFAA9B8A), fontSize: 13),
+              hintStyle: const TextStyle(
+                color: Color(0xFFAA9B8A),
+                fontSize: 13,
+              ),
               suffixText: suffixText,
               suffixStyle: const TextStyle(
-                  color: Color(0xFF8A6A45), fontWeight: FontWeight.w600),
+                color: Color(0xFF8A6A45),
+                fontWeight: FontWeight.w600,
+              ),
               filled: true,
               fillColor: const Color(0xFFF8F5EF),
               contentPadding: EdgeInsets.symmetric(
@@ -750,17 +744,23 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide:
-                    const BorderSide(color: Color(0xFFC69A5B), width: 1.4),
+                borderSide: const BorderSide(
+                  color: Color(0xFFC69A5B),
+                  width: 1.4,
+                ),
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide: const BorderSide(color: Color(0xFFD96C2F)),
+                borderSide: const BorderSide(
+                  color: Color(0xFFD96C2F),
+                ),
               ),
               focusedErrorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide:
-                    const BorderSide(color: Color(0xFFD96C2F), width: 1.4),
+                borderSide: const BorderSide(
+                  color: Color(0xFFD96C2F),
+                  width: 1.4,
+                ),
               ),
             ),
           ),
@@ -776,7 +776,21 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     required List<String> items,
     required void Function(String?) onChanged,
   }) {
-    return _buildCard(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -785,20 +799,26 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
           DropdownButtonFormField<String>(
             value: value,
             items: items
-                .map((item) =>
-                    DropdownMenuItem(value: item, child: Text(item)))
+                .map(
+                  (item) => DropdownMenuItem<String>(
+                value: item,
+                child: Text(item),
+              ),
+            )
                 .toList(),
             onChanged: onChanged,
-            validator: (v) =>
-                v == null || v.isEmpty ? 'Campo obligatorio' : null,
-            icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                color: Color(0xFF8A6A45)),
+            validator: (value) =>
+            value == null || value.isEmpty ? 'Campo obligatorio' : null,
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF8A6A45),
+            ),
             dropdownColor: Colors.white,
             decoration: InputDecoration(
               filled: true,
               fillColor: const Color(0xFFF8F5EF),
               contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: const BorderSide(color: Color(0xFFE6DDCF)),
@@ -809,167 +829,46 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
-                borderSide:
-                    const BorderSide(color: Color(0xFFC69A5B), width: 1.4),
+                borderSide: const BorderSide(
+                  color: Color(0xFFC69A5B),
+                  width: 1.4,
+                ),
               ),
             ),
             style: const TextStyle(
-                color: Color(0xFF4E3426),
-                fontWeight: FontWeight.w600,
-                fontSize: 14),
+              color: Color(0xFF4E3426),
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
           ),
         ],
       ),
     );
   }
-
-  // ── Image Picker Card ──────────────────────────────────────────────────────
-
-  Widget _buildImagePickerCard() {
-    final hasImage =
-        _currentImageSrc != null && _currentImageSrc!.isNotEmpty;
-
-    return _buildCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildFieldHeader(
-              title: 'Foto del producto', icon: Icons.image_outlined),
-          const SizedBox(height: 14),
-          GestureDetector(
-            onTap: _isUploadingImage ? null : _pickAndUploadImage,
-            child: Container(
-              height: 180,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F5EF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: hasImage
-                      ? const Color(0xFF2E8B57)
-                      : const Color(0xFFE6DDCF),
-                  width: hasImage ? 1.5 : 1,
-                ),
-              ),
-              child: _buildImageContent(),
-            ),
-          ),
-          if (hasImage) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(
-                  _imageChanged
-                      ? Icons.check_circle
-                      : Icons.image_outlined,
-                  color: const Color(0xFF2E8B57),
-                  size: 16,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    _imageChanged
-                        ? 'Nueva imagen lista'
-                        : 'Imagen actual del producto',
-                    style: const TextStyle(
-                      color: Color(0xFF2E8B57),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: _isUploadingImage ? null : _pickAndUploadImage,
-                  icon: const Icon(Icons.swap_horiz_rounded, size: 16),
-                  label: const Text('Cambiar'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFC69A5B),
-                    textStyle: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImageContent() {
-    if (_isUploadingImage) {
-      return const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-              color: Color(0xFFC69A5B), strokeWidth: 2.5),
-          SizedBox(height: 12),
-          Text('Procesando imagen...',
-              style: TextStyle(
-                  color: Color(0xFF8A6A45), fontWeight: FontWeight.w600)),
-        ],
-      );
-    }
-
-    // Muestra preview local si acaba de elegir
-    if (_selectedImage != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: Image.file(_selectedImage!,
-            fit: BoxFit.cover, width: double.infinity, height: double.infinity),
-      );
-    }
-
-    // Muestra imagen actual de la BD
-    if (_currentImageSrc != null && _currentImageSrc!.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: AppImage(
-          src: _currentImageSrc,
-          width: double.infinity,
-          height: 180,
-          borderRadius: 15,
-        ),
-      );
-    }
-
-    // Sin imagen
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF0EBE0),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: const Icon(Icons.add_photo_alternate_outlined,
-              size: 34, color: Color(0xFFC69A5B)),
-        ),
-        const SizedBox(height: 12),
-        const Text('Toca para elegir una foto',
-            style: TextStyle(
-                color: Color(0xFF8A6A45),
-                fontWeight: FontWeight.w700,
-                fontSize: 14)),
-        const SizedBox(height: 4),
-        const Text('Galería o cámara',
-            style: TextStyle(color: Color(0xFFAA9B8A), fontSize: 12)),
-      ],
-    );
-  }
-
-  // ── Date Card ──────────────────────────────────────────────────────────────
 
   Widget _buildDateCard() {
-    return _buildCard(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildFieldHeader(
-              title: 'Fecha de cosecha',
-              icon: Icons.calendar_month_outlined),
+            title: 'Fecha de cosecha',
+            icon: Icons.calendar_month_outlined,
+          ),
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(14),
@@ -999,17 +898,19 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                 const SizedBox(width: 10),
                 ElevatedButton.icon(
                   onPressed: _selectDate,
-                  icon:
-                      const Icon(Icons.event_available_outlined, size: 18),
+                  icon: const Icon(Icons.event_available_outlined, size: 18),
                   label: const Text('Elegir'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC69A5B),
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                 ),
               ],
@@ -1020,37 +921,54 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     );
   }
 
-  // ── Status Card ────────────────────────────────────────────────────────────
-
   Widget _buildStatusCard() {
     final color = _statusColor();
-    return _buildCard(
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildFieldHeader(
-              title: 'Estado del producto',
-              icon: Icons.toggle_on_outlined),
+            title: 'Estado del producto',
+            icon: Icons.toggle_on_outlined,
+          ),
           const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
-                  child: _buildSelectableStatus(
-                      label: 'Activo',
-                      value: 'Activo',
-                      color: const Color(0xFF2E8B57))),
+                child: _buildSelectableStatus(
+                  label: 'Activo',
+                  value: 'Activo',
+                  color: const Color(0xFF2E8B57),
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child: _buildSelectableStatus(
-                      label: 'Pausado',
-                      value: 'Pausado',
-                      color: const Color(0xFF8F8F8F))),
+                child: _buildSelectableStatus(
+                  label: 'Pausado',
+                  value: 'Pausado',
+                  color: const Color(0xFF8F8F8F),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: color.withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
@@ -1072,9 +990,10 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                         ? 'El producto seguirá visible en tu catálogo.'
                         : 'El producto quedará oculto temporalmente.',
                     style: TextStyle(
-                        fontSize: 12.5,
-                        color: color,
-                        fontWeight: FontWeight.w600),
+                      fontSize: 12.5,
+                      color: color,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -1091,20 +1010,23 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     required Color color,
   }) {
     final selected = _selectedStatus == value;
+
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => setState(() => _selectedStatus = value),
+      onTap: () {
+        setState(() {
+          _selectedStatus = value;
+        });
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
-          color: selected
-              ? color.withOpacity(0.12)
-              : const Color(0xFFF8F5EF),
+          color: selected ? color.withOpacity(0.12) : const Color(0xFFF8F5EF),
           borderRadius: BorderRadius.circular(16),
-          border:
-              Border.all(color: selected ? color : const Color(0xFFE6DDCF)),
+          border: Border.all(
+            color: selected ? color : const Color(0xFFE6DDCF),
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1134,9 +1056,9 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     );
   }
 
-  // ── Preview Card ───────────────────────────────────────────────────────────
-
   Widget _buildPreviewCard() {
+    final hasImage = _imageController.text.trim().isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -1156,15 +1078,19 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
         children: [
           const Row(
             children: [
-              Icon(Icons.visibility_outlined,
-                  color: Color(0xFFC69A5B), size: 20),
+              Icon(
+                Icons.visibility_outlined,
+                color: Color(0xFFC69A5B),
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'Vista previa rápida',
                 style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF4E3426)),
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4E3426),
+                ),
               ),
             ],
           ),
@@ -1180,24 +1106,34 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Imagen preview
-                  _selectedImage != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: Image.file(_selectedImage!,
-                              width: 96, height: 96, fit: BoxFit.cover),
-                        )
-                      : AppImage(
-                          src: _currentImageSrc,
-                          width: 96,
-                          height: 96,
-                          borderRadius: 20,
-                          placeholder: const Icon(
-                            Icons.inventory_2_outlined,
-                            color: Color(0xFFC69A5B),
+                  Container(
+                    width: 96,
+                    height: 96,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F0E8),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: hasImage
+                        ? ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.network(
+                        _imageController.text.trim(),
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) {
+                          return const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: Color(0xFF888888),
                             size: 38,
-                          ),
-                        ),
+                          );
+                        },
+                      ),
+                    )
+                        : const Icon(
+                      Icons.inventory_2_outlined,
+                      color: Color(0xFFC69A5B),
+                      size: 38,
+                    ),
+                  ),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -1213,25 +1149,30 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                   ? 'Nombre del producto'
                                   : _nameController.text.trim(),
                               style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF4E3426)),
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF4E3426),
+                              ),
                             ),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
                               decoration: BoxDecoration(
                                 color: _statusColor().withOpacity(0.11),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                    color: _statusColor().withOpacity(0.18)),
+                                  color: _statusColor().withOpacity(0.18),
+                                ),
                               ),
                               child: Text(
                                 _selectedStatus,
                                 style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: _statusColor()),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: _statusColor(),
+                                ),
                               ),
                             ),
                           ],
@@ -1244,9 +1185,10 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 12.5,
-                              color: Color(0xFF8C7B6B),
-                              height: 1.35),
+                            fontSize: 12.5,
+                            color: Color(0xFF8C7B6B),
+                            height: 1.35,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         _buildPreviewInfo(
@@ -1263,6 +1205,12 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                               ? 'Stock pendiente'
                               : 'Stock: ${_stockController.text.trim()}',
                           const Color(0xFF8A6A45),
+                        ),
+                        const SizedBox(height: 6),
+                        _buildPreviewInfo(
+                          Icons.straighten_rounded,
+                          'Unidad: $_selectedUnit',
+                          const Color(0xFF2E8B57),
                         ),
                         const SizedBox(height: 6),
                         _buildPreviewInfo(
@@ -1290,39 +1238,42 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
         Icon(icon, size: 16, color: color),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(text,
-              style: const TextStyle(
-                  fontSize: 12.5,
-                  color: Color(0xFF7A6D60),
-                  fontWeight: FontWeight.w600)),
+          child: Text(
+            text,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF7A6D60),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );
   }
 
-  // ── Save Button ────────────────────────────────────────────────────────────
-
   Widget _buildSaveButton() {
     return Consumer<ProductController>(
-      builder: (context, productController, _) {
-        final isDisabled =
-            productController.isLoading || _isUploadingImage;
+      builder: (context, productController, child) {
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: isDisabled ? null : _saveProduct,
-            icon: isDisabled
+            onPressed: productController.isLoading ? null : _saveProduct,
+            icon: productController.isLoading
                 ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.2, color: Colors.white),
-                  )
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: Colors.white,
+              ),
+            )
                 : const Icon(Icons.save_outlined),
             label: Text(
-              isDisabled ? 'Guardando...' : 'Guardar cambios',
+              productController.isLoading ? 'Guardando...' : 'Guardar cambios',
               style: const TextStyle(
-                  fontSize: 15.5, fontWeight: FontWeight.w700),
+                fontSize: 15.5,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFC69A5B),
@@ -1331,15 +1282,14 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 17),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18)),
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
           ),
         );
       },
     );
   }
-
-  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -1382,8 +1332,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                         const SizedBox(height: 18),
                         Container(
                           width: double.infinity,
-                          padding:
-                              const EdgeInsets.fromLTRB(16, 18, 16, 22),
+                          padding: const EdgeInsets.fromLTRB(16, 18, 16, 22),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.92),
                             borderRadius: BorderRadius.circular(30),
@@ -1400,15 +1349,19 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                             children: [
                               const Row(
                                 children: [
-                                  Icon(Icons.edit_note_rounded,
-                                      color: Color(0xFFC69A5B), size: 22),
+                                  Icon(
+                                    Icons.edit_note_rounded,
+                                    color: Color(0xFFC69A5B),
+                                    size: 22,
+                                  ),
                                   SizedBox(width: 8),
                                   Text(
                                     'Información del producto',
                                     style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF4E3426)),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF4E3426),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -1416,23 +1369,22 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                               const Text(
                                 'Actualiza los datos principales, el inventario y la presentación visual del producto.',
                                 style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: Color(0xFF8C7B6B),
-                                    height: 1.35),
+                                  fontSize: 12.5,
+                                  color: Color(0xFF8C7B6B),
+                                  height: 1.35,
+                                ),
                               ),
                               const SizedBox(height: 18),
                               if (isWide) ...[
                                 Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
                                       child: _buildInputCard(
                                         title: 'Nombre del producto',
                                         hint: 'Ej. Tomate Cherry Orgánico',
                                         controller: _nameController,
-                                        icon:
-                                            Icons.shopping_basket_outlined,
+                                        icon: Icons.shopping_basket_outlined,
                                       ),
                                     ),
                                     const SizedBox(width: 14),
@@ -1442,18 +1394,18 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                         icon: Icons.straighten_rounded,
                                         value: _selectedUnit,
                                         items: _units,
-                                        onChanged: (v) {
-                                          if (v == null) return;
-                                          setState(
-                                              () => _selectedUnit = v);
+                                        onChanged: (value) {
+                                          if (value == null) return;
+                                          setState(() {
+                                            _selectedUnit = value;
+                                          });
                                         },
                                       ),
                                     ),
                                   ],
                                 ),
                                 Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
                                       child: _buildInputCard(
@@ -1461,9 +1413,10 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                         hint: 'Ej. 4.5',
                                         controller: _priceController,
                                         icon: Icons.attach_money_rounded,
-                                        type: const TextInputType
-                                            .numberWithOptions(
-                                            decimal: true),
+                                        type:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
                                         suffixText: 'monedas',
                                         customValidator: _validatePrice,
                                       ),
@@ -1494,9 +1447,11 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                   icon: Icons.straighten_rounded,
                                   value: _selectedUnit,
                                   items: _units,
-                                  onChanged: (v) {
-                                    if (v == null) return;
-                                    setState(() => _selectedUnit = v);
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      _selectedUnit = value;
+                                    });
                                   },
                                 ),
                                 _buildInputCard(
@@ -1504,8 +1459,9 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                   hint: 'Ej. 4.5',
                                   controller: _priceController,
                                   icon: Icons.attach_money_rounded,
-                                  type: const TextInputType
-                                      .numberWithOptions(decimal: true),
+                                  type: const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                                   suffixText: 'monedas',
                                   customValidator: _validatePrice,
                                 ),
@@ -1522,12 +1478,18 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                               _buildInputCard(
                                 title: 'Descripción',
                                 hint:
-                                    'Describe el producto, calidad, uso o beneficio principal',
+                                'Describe el producto, calidad, uso o beneficio principal',
                                 controller: _descriptionController,
                                 icon: Icons.notes_rounded,
                                 maxLines: 4,
                               ),
-                              _buildImagePickerCard(),
+                              _buildInputCard(
+                                title: 'URL de la imagen',
+                                hint: 'https://...',
+                                controller: _imageController,
+                                icon: Icons.image_outlined,
+                                customValidator: _validateImageUrl,
+                              ),
                               _buildDateCard(),
                               _buildPreviewCard(),
                               const SizedBox(height: 22),
