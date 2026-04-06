@@ -205,38 +205,44 @@ class _ProducerPaymentViewState extends State<ProducerPaymentView> {
       _isSubmitting = true;
     });
 
-    bool success = false;
-
     try {
-      success = await requestCtrl.submitRequest(
+      final success = await requestCtrl.submitRequest(
         userID: userId,
         coins: widget.coins,
         amount: widget.totalBs,
         imageUrl: _uploadedBase64!,
       );
 
+      if (!mounted) return;
+
       if (success) {
         await userCtrl.reloadCurrentUser();
+        if (!mounted) return;
+
+        await _showSuccessDialog();
+        return;
       }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      _showSnack(
+        requestCtrl.errorMessage ?? 'No se pudo enviar la solicitud.',
+        error: true,
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() {
+        _isSubmitting = false;
+      });
+
+      _showSnack(
+        'No se pudo enviar la solicitud.',
+        error: true,
+      );
     }
-
-    if (!mounted) return;
-
-    if (success) {
-      _showSuccessDialog();
-      return;
-    }
-
-    _showSnack(
-      requestCtrl.errorMessage ?? 'No se pudo enviar la solicitud.',
-      error: true,
-    );
   }
 
   Future<void> _showSuccessDialog() async {
@@ -346,7 +352,10 @@ class _ProducerPaymentViewState extends State<ProducerPaymentView> {
       },
     );
 
+
     if (!mounted) return;
+
+
     Navigator.of(context).pop(true);
   }
 
@@ -365,59 +374,56 @@ class _ProducerPaymentViewState extends State<ProducerPaymentView> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<RequestController>(
-      builder: (context, requestCtrl, _) {
-        final qrImage = requestCtrl.config.qrImage;
-        final bsPerCoin =
-        requestCtrl.config.bsPerCoin > 0 ? requestCtrl.config.bsPerCoin : widget.bsPerCoin;
-        final totalBs = (widget.coins * bsPerCoin).toStringAsFixed(2);
+    final config = context.read<RequestController>().config;
+    final qrImage = config.qrImage;
+    final bsPerCoin =
+    config.bsPerCoin > 0 ? config.bsPerCoin : widget.bsPerCoin;
+    final totalBs = (widget.coins * bsPerCoin).toStringAsFixed(2);
 
-        return Scaffold(
-          backgroundColor: _bg,
-          body: SafeArea(
-            child: Column(
-              children: [
-                _buildTopBar(context),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildHero(widget.coins, totalBs),
-                        const SizedBox(height: 18),
-                        _buildSectionCard(
-                          title: 'Resumen del pago',
-                          subtitle:
-                          'Confirma el monto, realiza el pago con QR y luego sube tu comprobante.',
-                          child: _buildSummary(bsPerCoin, totalBs),
-                        ),
-                        const SizedBox(height: 18),
-                        _buildSectionCard(
-                          title: 'Pago por QR',
-                          subtitle:
-                          'Escanea el QR desde tu banco o billetera y paga exactamente el monto indicado.',
-                          child: _buildQrCard(qrImage, bsPerCoin),
-                        ),
-                        const SizedBox(height: 18),
-                        _buildSectionCard(
-                          title: 'Comprobante',
-                          subtitle:
-                          'Adjunta una foto o captura clara del pago para que el administrador pueda revisarlo.',
-                          child: _buildReceiptPicker(),
-                        ),
-                        const SizedBox(height: 18),
-                        _buildInfoNote(),
-                      ],
+    return Scaffold(
+      backgroundColor: _bg,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildTopBar(context),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHero(widget.coins, totalBs),
+                    const SizedBox(height: 18),
+                    _buildSectionCard(
+                      title: 'Resumen del pago',
+                      subtitle:
+                      'Confirma el monto, realiza el pago con QR y luego sube tu comprobante.',
+                      child: _buildSummary(bsPerCoin, totalBs),
                     ),
-                  ),
+                    const SizedBox(height: 18),
+                    _buildSectionCard(
+                      title: 'Pago por QR',
+                      subtitle:
+                      'Escanea el QR desde tu banco o billetera y paga exactamente el monto indicado.',
+                      child: _buildQrCard(qrImage, bsPerCoin),
+                    ),
+                    const SizedBox(height: 18),
+                    _buildSectionCard(
+                      title: 'Comprobante',
+                      subtitle:
+                      'Adjunta una foto o captura clara del pago para que el administrador pueda revisarlo.',
+                      child: _buildReceiptPicker(),
+                    ),
+                    const SizedBox(height: 18),
+                    _buildInfoNote(),
+                  ],
                 ),
-                _buildFooter(),
-              ],
+              ),
             ),
-          ),
-        );
-      },
+            _buildFooter(),
+          ],
+        ),
+      ),
     );
   }
 

@@ -164,6 +164,22 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     });
   }
 
+  Future<void> _refreshAfterRequestSent() async {
+    if (!mounted) return;
+
+    final user = context.read<UserController>().currentUser;
+    final requestController = context.read<RequestController>();
+
+    if (user == null || user.id == null || user.id! <= 0) return;
+
+    await requestController.loadUserRequests(user.id!);
+
+
+    if (!mounted) return;
+
+
+  }
+
   Future<void> _goToDashboard() async {
     if (!mounted) return;
     await Navigator.pushReplacement(
@@ -227,10 +243,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
         ),
       );
 
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (!mounted) return;
-        await _refreshData();
-      });
+      _refreshAfterRequestSent();
     }
   }
 

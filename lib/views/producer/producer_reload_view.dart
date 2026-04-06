@@ -447,10 +447,8 @@ class _ProducerReloadViewState extends State<ProducerReloadView> {
                   if (!context.mounted) return;
 
                   if (sent == true) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!context.mounted) return;
-                      Navigator.of(context).pop(true);
-                    });
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop(true);
                   }
                 }
                     : null,
