@@ -15,6 +15,7 @@ import '../../models/request_model.dart';
 import 'producer_dashboard_view.dart';
 import 'producer_products_view.dart';
 import 'producer_profile_view.dart';
+import 'producer_reload_view.dart';
 
 class ProducerCoinsView extends StatefulWidget {
   const ProducerCoinsView({super.key});
@@ -204,429 +205,32 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     }
   }
 
-  Future<void> _showRechargeDialog() async {
+  Future<void> _goToReloadView() async {
     if (!mounted) return;
 
-    final pageContext = context;
-    final scaffoldMessenger = ScaffoldMessenger.maybeOf(pageContext);
-    final userController = pageContext.read<UserController>();
-    final coinController = pageContext.read<CoinMovementController>();
-    final requestController = pageContext.read<RequestController>();
-    final user = userController.currentUser;
-
-    if (user == null || user.id == null || user.id! <= 0) {
-      scaffoldMessenger?.hideCurrentSnackBar();
-      scaffoldMessenger?.showSnackBar(
-        const SnackBar(content: Text('No se encontró un productor válido.')),
-      );
-      return;
-    }
-
-    _amountController.clear();
-    _descriptionController.clear();
-    _selectedProofFile = null;
-
-    final result = await showModalBottomSheet<bool>(
-      context: pageContext,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        bool isSubmitting = false;
-
-        return StatefulBuilder(
-          builder: (modalContext, setSheetState) {
-            final bsPerCoin = requestController.config.bsPerCoin <= 0
-                ? 100.0
-                : requestController.config.bsPerCoin;
-
-            final coinsText = _amountController.text.trim();
-            final coinsValue = int.tryParse(coinsText);
-            final amountToPay = (coinsValue == null || coinsValue <= 0)
-                ? 0.0
-                : coinsValue * bsPerCoin;
-
-            Future<void> pickProof() async {
-              final picked = await _picker.pickImage(
-                source: ImageSource.gallery,
-                imageQuality: 80,
-                maxWidth: 1280,
-                maxHeight: 1280,
-              );
-
-              if (picked == null) return;
-
-              final file = File(picked.path);
-              final imageProvider = FileImage(file);
-
-              await precacheImage(imageProvider, modalContext);
-
-              if (!modalContext.mounted) return;
-
-              setSheetState(() {
-                _selectedProofFile = file;
-              });
-            }
-
-            Future<void> submitRequest() async {
-              final amountText = _amountController.text.trim();
-
-              if (amountText.isEmpty) {
-                scaffoldMessenger?.hideCurrentSnackBar();
-                scaffoldMessenger?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Ingresa la cantidad de monedas.'),
-                  ),
-                );
-                return;
-              }
-
-              final coins = int.tryParse(amountText);
-
-              if (coins == null || coins <= 0) {
-                scaffoldMessenger?.hideCurrentSnackBar();
-                scaffoldMessenger?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Ingresa una cantidad válida de monedas.'),
-                  ),
-                );
-                return;
-              }
-
-              if (_selectedProofFile == null) {
-                scaffoldMessenger?.hideCurrentSnackBar();
-                scaffoldMessenger?.showSnackBar(
-                  const SnackBar(
-                    content: Text('Debes adjuntar el comprobante de pago.'),
-                  ),
-                );
-                return;
-              }
-
-              if (isSubmitting) return;
-              if (!modalContext.mounted) return;
-
-              setSheetState(() {
-                isSubmitting = true;
-              });
-
-              bool success = false;
-
-              try {
-                final imageBase64 = await ImageHelper.toBase64(_selectedProofFile!);
-
-                if (imageBase64 == null || imageBase64.isEmpty) {
-                  throw Exception('No se pudo convertir la imagen.');
-                }
-
-                success = await requestController.submitRequest(
-                  userID: user.id!,
-                  coins: coins,
-                  amount: coins * bsPerCoin,
-                  imageUrl: imageBase64,
-                );
-
-                if (success) {
-                  await userController.reloadCurrentUser();
-                  await coinController.loadCoinData(user.id!);
-                  await requestController.loadUserRequests(user.id!);
-                  await requestController.resumePollingIfNeeded(user.id!);
-                }
-              } catch (_) {
-                success = false;
-              }
-
-              if (!mounted) return;
-              if (!modalContext.mounted) return;
-
-              setSheetState(() {
-                isSubmitting = false;
-              });
-
-              if (success) {
-                if (Navigator.of(sheetContext).canPop()) {
-                  Navigator.of(sheetContext).pop(true);
-                }
-                return;
-              }
-
-              scaffoldMessenger?.hideCurrentSnackBar();
-              scaffoldMessenger?.showSnackBar(
-                SnackBar(
-                  content: Text(
-                    requestController.errorMessage ??
-                        coinController.errorMessage ??
-                        'No se pudo registrar la solicitud de recarga.',
-                  ),
-                ),
-              );
-            }
-
-            final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
-
-            return Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
-              child: Material(
-                color: Colors.transparent,
-                child: SingleChildScrollView(
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: _card,
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: _border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
-                          blurRadius: 24,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 58,
-                              height: 58,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [_primary, Color(0xFFB9854A)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                              child: const Icon(
-                                Icons.add_card_rounded,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Text(
-                                'Solicitar recarga',
-                                style: TextStyle(
-                                  fontSize: 21,
-                                  fontWeight: FontWeight.w800,
-                                  color: _brownText,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        const Text(
-                          'Haz tu pago, adjunta el comprobante y luego envía la solicitud. El administrador deberá aprobarla para que las monedas aparezcan en tu saldo.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: _softText,
-                            height: 1.45,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        _buildQrPaymentCard(
-                          config: requestController.config,
-                          compact: true,
-                        ),
-                        const SizedBox(height: 14),
-                        TextField(
-                          controller: _amountController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                          ],
-                          onChanged: (_) {
-                            if (!modalContext.mounted) return;
-                            setSheetState(() {});
-                          },
-                          decoration: InputDecoration(
-                            labelText: 'Cantidad de monedas',
-                            hintText: 'Ejemplo: 5',
-                            filled: true,
-                            fillColor: const Color(0xFFFBF8F3),
-                            labelStyle: const TextStyle(color: _softText),
-                            hintStyle: const TextStyle(color: _softText),
-                            prefixIcon: const Icon(
-                              Icons.monetization_on_outlined,
-                              color: _primaryDark,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: const BorderSide(color: _border),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: const BorderSide(color: _border),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: const BorderSide(color: _primary),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFFCF6),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: _divider),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Resumen del pago',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: _primaryDark,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              _buildSummaryLine(
-                                'Monedas',
-                                '${coinsValue ?? 0}',
-                              ),
-                              _buildSummaryLine(
-                                'Bs por moneda',
-                                bsPerCoin.toStringAsFixed(2),
-                              ),
-                              _buildSummaryLine(
-                                'Total a pagar',
-                                'Bs ${amountToPay.toStringAsFixed(2)}',
-                                highlight: true,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        TextField(
-                          controller: _descriptionController,
-                          maxLines: 3,
-                          decoration: InputDecoration(
-                            labelText: 'Descripción opcional',
-                            hintText:
-                            'Ejemplo: Recarga para publicar nuevos productos',
-                            filled: true,
-                            fillColor: const Color(0xFFFBF8F3),
-                            labelStyle: const TextStyle(color: _softText),
-                            hintStyle: const TextStyle(color: _softText),
-                            alignLabelWithHint: true,
-                            prefixIcon: const Padding(
-                              padding: EdgeInsets.only(bottom: 46),
-                              child: Icon(
-                                Icons.edit_note_rounded,
-                                color: _primaryDark,
-                              ),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: const BorderSide(color: _border),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: const BorderSide(color: _border),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: const BorderSide(color: _primary),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        _buildProofPicker(
-                          file: _selectedProofFile,
-                          onPick: isSubmitting ? null : pickProof,
-                          compact: true,
-                        ),
-                        const SizedBox(height: 20),
-                        OverflowBar(
-                          spacing: 12,
-                          overflowSpacing: 12,
-                          alignment: MainAxisAlignment.end,
-                          children: [
-                            OutlinedButton(
-                              onPressed: isSubmitting
-                                  ? null
-                                  : () {
-                                if (Navigator.of(sheetContext).canPop()) {
-                                  Navigator.of(sheetContext).pop(false);
-                                }
-                              },
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size(120, 52),
-                                side: const BorderSide(color: _border),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: const Text('Cancelar'),
-                            ),
-                            ElevatedButton(
-                              onPressed: isSubmitting ? null : submitRequest,
-                              style: ElevatedButton.styleFrom(
-                                minimumSize: const Size(145, 52),
-                                backgroundColor: _primary,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              child: isSubmitting
-                                  ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              )
-                                  : const Text(
-                                'Enviar solicitud',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const ProducerReloadView(),
+      ),
     );
 
     if (!mounted) return;
 
-    _amountController.clear();
-    _descriptionController.clear();
-
-    if (mounted) {
-      setState(() {
-        _selectedProofFile = null;
-      });
-    }
-
     if (result == true) {
+      final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+
       scaffoldMessenger?.hideCurrentSnackBar();
       scaffoldMessenger?.showSnackBar(
         const SnackBar(
           content: Text('Solicitud de recarga enviada correctamente.'),
         ),
       );
-      await _refreshData();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        await _refreshData();
+      });
     }
   }
 
@@ -659,7 +263,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
           elevation: 12,
           onPressed: (coinController.isBusy || requestController.isLoading)
               ? null
-              : _showRechargeDialog,
+              : _goToReloadView,
           icon: const Icon(Icons.add_card_rounded, color: Colors.white),
           label: const Text(
             'Solicitar',
@@ -791,7 +395,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                                 subtitle:
                                 'Accesos principales para recargar o actualizar tu saldo.',
                                 child: _buildActionsSection(
-                                  onRequestRecharge: _showRechargeDialog,
+                                  onRequestRecharge: _goToReloadView,
                                   onRefresh: _refreshData,
                                   isBusy: coinController.isBusy ||
                                       requestController.isLoading,
@@ -1278,7 +882,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                   children: [
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: isBusy ? null : _showRechargeDialog,
+                        onPressed: isBusy ? null : _goToReloadView,
                         style: FilledButton.styleFrom(
                           backgroundColor: _primary,
                           foregroundColor: Colors.white,
