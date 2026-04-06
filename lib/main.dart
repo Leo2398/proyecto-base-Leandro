@@ -9,6 +9,8 @@ import 'controllers/product_controller.dart';
 import 'controllers/cart_controller.dart';
 import 'services/product_service.dart';
 import 'controllers/request_controller.dart';
+import 'controllers/coin_movement_controller.dart';
+import 'services/coin_movement_service.dart';
 void main() {
   runApp(const MyApp());
 }
@@ -26,6 +28,11 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => CartController()),
         ChangeNotifierProvider(create: (_) => RequestController()),
+        ChangeNotifierProvider(
+          create: (_) => CoinMovementController(
+            coinMovementService: CoinMovementService(),
+          ),
+        ),
       ],
       child: MaterialApp(
         title: 'Agro App',

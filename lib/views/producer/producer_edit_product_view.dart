@@ -1,7 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/product_controller.dart';
+import '../../core/image_helper.dart';
 import '../../models/product_model.dart';
 
 class ProducerEditProductView extends StatefulWidget {
@@ -24,11 +30,18 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _priceController;
   late final TextEditingController _stockController;
-  late final TextEditingController _imageController;
+
+  final ImagePicker _picker = ImagePicker();
 
   DateTime? _harvestDate;
   String _selectedUnit = 'kg';
   String _selectedStatus = 'Activo';
+
+  File? _selectedImageFile;
+  String? _imageBase64OrUrl;
+
+  bool _isPickingImage = false;
+  bool _isSubmitting = false;
 
   final List<String> _units = [
     'kg',
@@ -52,7 +65,6 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
       text: product.price.toStringAsFixed(product.price % 1 == 0 ? 0 : 2),
     );
     _stockController = TextEditingController(text: product.stock.toString());
-    _imageController = TextEditingController(text: product.picture ?? '');
 
     _selectedUnit = (product.unit != null && _units.contains(product.unit))
         ? product.unit!
@@ -60,15 +72,15 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
 
     _selectedStatus = product.state == 1 ? 'Activo' : 'Pausado';
     _harvestDate = product.harvestDate;
+    _imageBase64OrUrl = _normalizeOptionalText(product.picture);
 
-    _nameController.addListener(_refresh);
-    _descriptionController.addListener(_refresh);
-    _priceController.addListener(_refresh);
-    _stockController.addListener(_refresh);
-    _imageController.addListener(_refresh);
+    _nameController.addListener(_refreshPreview);
+    _descriptionController.addListener(_refreshPreview);
+    _priceController.addListener(_refreshPreview);
+    _stockController.addListener(_refreshPreview);
   }
 
-  void _refresh() {
+  void _refreshPreview() {
     if (mounted) {
       setState(() {});
     }
@@ -76,26 +88,27 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
 
   @override
   void dispose() {
-    _nameController.removeListener(_refresh);
-    _descriptionController.removeListener(_refresh);
-    _priceController.removeListener(_refresh);
-    _stockController.removeListener(_refresh);
-    _imageController.removeListener(_refresh);
+    _nameController.removeListener(_refreshPreview);
+    _descriptionController.removeListener(_refreshPreview);
+    _priceController.removeListener(_refreshPreview);
+    _stockController.removeListener(_refreshPreview);
 
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
     _stockController.dispose();
-    _imageController.dispose();
     super.dispose();
   }
 
   Future<void> _selectDate() async {
+    final now = DateTime.now();
+    final initialDate = _harvestDate ?? now;
+
     final date = await showDatePicker(
       context: context,
-      initialDate: _harvestDate ?? DateTime.now(),
+      initialDate: initialDate.isAfter(now) ? now : initialDate,
       firstDate: DateTime(2023),
-      lastDate: DateTime(2030),
+      lastDate: now,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -118,9 +131,168 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     }
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      setState(() {
+        _isPickingImage = true;
+      });
+
+      final picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 82,
+        maxWidth: 1400,
+        maxHeight: 1400,
+      );
+
+      if (picked == null) {
+        if (!mounted) return;
+        setState(() {
+          _isPickingImage = false;
+        });
+        return;
+      }
+
+      final file = File(picked.path);
+      final base64 = await ImageHelper.toBase64(file);
+
+      if (!mounted) return;
+
+      if (base64 == null || base64.isEmpty) {
+        setState(() {
+          _isPickingImage = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF4E3426),
+            content: Text('No se pudo procesar la imagen seleccionada'),
+          ),
+        );
+        return;
+      }
+
+      await precacheImage(FileImage(file), context);
+
+      if (!mounted) return;
+
+      setState(() {
+        _selectedImageFile = file;
+        _imageBase64OrUrl = base64;
+        _isPickingImage = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isPickingImage = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF4E3426),
+          content: Text('Error seleccionando imagen: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showImageSourceSheet() async {
+    FocusScope.of(context).unfocus();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.10),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Seleccionar imagen',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF4E3426),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Puedes tomar una foto o elegir una imagen desde tu galería.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF8C7B6B),
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildImageSourceOption(
+                    icon: Icons.photo_camera_back_rounded,
+                    title: 'Tomar foto',
+                    subtitle: 'Usar la cámara del dispositivo',
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await _pickImage(ImageSource.camera);
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _buildImageSourceOption(
+                    icon: Icons.photo_library_rounded,
+                    title: 'Elegir de la galería',
+                    subtitle: 'Seleccionar una imagen guardada',
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await _pickImage(ImageSource.gallery);
+                    },
+                  ),
+                  if (_hasImage()) ...[
+                    const SizedBox(height: 10),
+                    _buildImageSourceOption(
+                      icon: Icons.delete_outline_rounded,
+                      title: 'Quitar imagen',
+                      subtitle: 'Eliminar la imagen seleccionada',
+                      iconColor: const Color(0xFFD96C2F),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _clearSelectedImage();
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _clearSelectedImage() {
+    setState(() {
+      _selectedImageFile = null;
+      _imageBase64OrUrl = null;
+    });
+  }
+
   Future<void> _saveProduct() async {
     FocusScope.of(context).unfocus();
 
+    if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
 
     if (_harvestDate == null) {
@@ -133,7 +305,17 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
       return;
     }
 
-    final price = double.tryParse(_priceController.text.trim());
+    if (_imageBase64OrUrl == null || _imageBase64OrUrl!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Debes seleccionar o mantener una foto del producto'),
+        ),
+      );
+      return;
+    }
+
+    final price = _parsePrice(_priceController.text);
     final stock = int.tryParse(_stockController.text.trim());
 
     if (price == null || stock == null) {
@@ -149,40 +331,52 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     final productController =
     Provider.of<ProductController>(context, listen: false);
 
-    final updatedProduct = ProductModel(
-      id: widget.product.id,
-      name: _nameController.text.trim(),
-      description: _normalizeOptionalText(_descriptionController.text),
-      picture: _normalizeOptionalText(_imageController.text),
-      price: price,
-      unit: _selectedUnit,
-      stock: stock,
-      state: _selectedStatus == 'Activo' ? 1 : 0,
-      harvestDate: _harvestDate,
-      userID: widget.product.userID,
-    );
+    setState(() {
+      _isSubmitting = true;
+    });
 
-    final success = await productController.updateProduct(updatedProduct);
-
-    if (!mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          backgroundColor: Color(0xFF4E3426),
-          content: Text('Producto actualizado correctamente'),
-        ),
+    try {
+      final updatedProduct = ProductModel(
+        id: widget.product.id,
+        name: _nameController.text.trim(),
+        description: _normalizeOptionalText(_descriptionController.text),
+        picture: _imageBase64OrUrl,
+        price: price,
+        unit: _selectedUnit,
+        stock: stock,
+        state: _selectedStatus == 'Activo' ? 1 : 0,
+        harvestDate: _harvestDate,
+        userID: widget.product.userID,
       );
-      Navigator.pop(context, true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFF4E3426),
-          content: Text(
-            productController.errorMessage ?? 'Error al actualizar producto',
+
+      final success = await productController.updateProduct(updatedProduct);
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Color(0xFF4E3426),
+            content: Text('Producto actualizado correctamente'),
           ),
-        ),
-      );
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFF4E3426),
+            content: Text(
+              productController.errorMessage ?? 'Error al actualizar producto',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
@@ -190,6 +384,11 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     if (value == null) return null;
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  double? _parsePrice(String? value) {
+    if (value == null) return null;
+    return double.tryParse(value.trim().replaceAll(',', '.'));
   }
 
   String? _validateRequired(String? value) {
@@ -204,7 +403,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
       return 'Campo obligatorio';
     }
 
-    final parsed = double.tryParse(value.trim());
+    final parsed = _parsePrice(value);
     if (parsed == null) {
       return 'Ingresa un precio válido';
     }
@@ -229,19 +428,6 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     return null;
   }
 
-  String? _validateImageUrl(String? value) {
-    if (value == null || value.trim().isEmpty) {
-      return 'Campo obligatorio';
-    }
-
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null || (!uri.isScheme('http') && !uri.isScheme('https'))) {
-      return 'Ingresa una URL válida';
-    }
-
-    return null;
-  }
-
   double _getMaxContentWidth(double screenWidth) {
     if (screenWidth >= 1400) return 1020;
     if (screenWidth >= 1100) return 920;
@@ -254,17 +440,255 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
-  Color _statusColor() {
+  Color _getStatusColor() {
     return _selectedStatus == 'Activo'
         ? const Color(0xFF2E8B57)
         : const Color(0xFF8F8F8F);
+  }
+
+  bool _hasImage() {
+    return _selectedImageFile != null ||
+        (_imageBase64OrUrl != null && _imageBase64OrUrl!.trim().isNotEmpty);
+  }
+
+  bool _isNetworkImage(String value) {
+    final uri = Uri.tryParse(value.trim());
+    return uri != null && (uri.isScheme('http') || uri.isScheme('https'));
+  }
+
+  Uint8List? _tryDecodeBase64(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+
+    final raw = value.trim();
+
+    if (_isNetworkImage(raw)) return null;
+
+    try {
+      final normalized = raw.startsWith('data:image')
+          ? raw.split(',').last
+          : raw;
+      return base64Decode(normalized);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _buildProductImage({
+    required double width,
+    required double height,
+    required BorderRadius borderRadius,
+    BoxFit fit = BoxFit.cover,
+    IconData placeholderIcon = Icons.image_outlined,
+    double placeholderIconSize = 42,
+    Color placeholderIconColor = const Color(0xFFC69A5B),
+    Color placeholderBackground = const Color(0xFFF8F5EF),
+  }) {
+    Widget child;
+
+    if (_selectedImageFile != null) {
+      child = Image.file(
+        _selectedImageFile!,
+        width: width,
+        height: height,
+        fit: fit,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) {
+          return Container(
+            width: width,
+            height: height,
+            color: placeholderBackground,
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.broken_image_outlined,
+              size: placeholderIconSize,
+              color: const Color(0xFF8A6A45),
+            ),
+          );
+        },
+      );
+    } else if (_imageBase64OrUrl != null && _imageBase64OrUrl!.trim().isNotEmpty) {
+      final rawImage = _imageBase64OrUrl!.trim();
+
+      if (_isNetworkImage(rawImage)) {
+        child = Image.network(
+          rawImage,
+          width: width,
+          height: height,
+          fit: fit,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              width: width,
+              height: height,
+              color: placeholderBackground,
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.broken_image_outlined,
+                size: placeholderIconSize,
+                color: const Color(0xFF8A6A45),
+              ),
+            );
+          },
+        );
+      } else {
+        final bytes = _tryDecodeBase64(rawImage);
+
+        if (bytes != null) {
+          child = Image.memory(
+            bytes,
+            width: width,
+            height: height,
+            fit: fit,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: width,
+                height: height,
+                color: placeholderBackground,
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.broken_image_outlined,
+                  size: placeholderIconSize,
+                  color: const Color(0xFF8A6A45),
+                ),
+              );
+            },
+          );
+        } else {
+          child = Container(
+            width: width,
+            height: height,
+            color: placeholderBackground,
+            alignment: Alignment.center,
+            child: Icon(
+              placeholderIcon,
+              size: placeholderIconSize,
+              color: placeholderIconColor,
+            ),
+          );
+        }
+      }
+    } else {
+      child = Container(
+        width: width,
+        height: height,
+        color: placeholderBackground,
+        alignment: Alignment.center,
+        child: Icon(
+          placeholderIcon,
+          size: placeholderIconSize,
+          color: placeholderIconColor,
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: borderRadius,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildImageSourceOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    Color iconColor = const Color(0xFFC69A5B),
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBF8F3),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE9DFD1)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF4E3426),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF8C7B6B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFieldHeader({
+    required String title,
+    required IconData icon,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF5F0E8),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            icon,
+            color: const Color(0xFFC69A5B),
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF4E3426),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildTopBar() {
     return Row(
       children: [
         IconButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSubmitting ? null : () => Navigator.pop(context),
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             color: Color(0xFF5A3E2B),
@@ -337,8 +761,6 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
   }
 
   Widget _buildHeroBanner() {
-    final hasImage = _imageController.text.trim().isNotEmpty;
-
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(28),
@@ -392,109 +814,70 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
               borderRadius: BorderRadius.circular(28),
               color: Colors.black.withOpacity(0.03),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 104,
-                  height: 104,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.24),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.18),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _buildBannerChip(
+                      Icons.auto_awesome_outlined,
+                      'Edición premium',
                     ),
-                  ),
-                  child: hasImage
-                      ? ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: Image.network(
-                      _imageController.text.trim(),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) {
-                        return const Icon(
-                          Icons.image_not_supported_outlined,
-                          color: Colors.white,
-                          size: 40,
-                        );
-                      },
+                    _buildBannerChip(
+                      Icons.inventory_2_outlined,
+                      'Catálogo del productor',
                     ),
-                  )
-                      : const Icon(
-                    Icons.inventory_2_outlined,
+                    _buildBannerChip(
+                      Icons.photo_camera_back_outlined,
+                      'Foto actualizable',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Actualiza tu producto',
+                  style: TextStyle(
                     color: Colors.white,
-                    size: 42,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    height: 1.15,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildBannerChip(
-                            Icons.auto_awesome_outlined,
-                            'Edición premium',
-                          ),
-                          _buildBannerChip(
-                            Icons.inventory_2_outlined,
-                            'Catálogo productor',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        _nameController.text.trim().isEmpty
-                            ? 'Producto sin nombre'
-                            : _nameController.text.trim(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 23,
-                          fontWeight: FontWeight.bold,
-                          height: 1.15,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _descriptionController.text.trim().isEmpty
-                            ? 'Actualiza la información del producto para mantener tu catálogo al día.'
-                            : _descriptionController.text.trim(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          height: 1.35,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildHeroMiniStat(
-                              icon: Icons.payments_outlined,
-                              label: _priceController.text.trim().isEmpty
-                                  ? '--'
-                                  : '${_priceController.text.trim()} mon.',
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _buildHeroMiniStat(
-                              icon: Icons.inventory_2_outlined,
-                              label: _stockController.text.trim().isEmpty
-                                  ? 'Stock --'
-                                  : 'Stock ${_stockController.text.trim()}',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                const SizedBox(height: 6),
+                const Text(
+                  'Modifica foto, precio, stock, estado y fecha de cosecha para que tu publicación siga viéndose profesional.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    height: 1.35,
                   ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildHeroMiniStat(
+                        icon: Icons.photo_camera_back_outlined,
+                        label: 'Foto',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildHeroMiniStat(
+                        icon: Icons.edit_note_rounded,
+                        label: 'Edición',
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _buildHeroMiniStat(
+                        icon: Icons.event_available_outlined,
+                        label: 'Cosecha',
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -547,8 +930,6 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
           const SizedBox(height: 6),
           Text(
             label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 11,
@@ -560,29 +941,29 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     );
   }
 
-  Widget _buildQuickCards() {
+  Widget _buildQuickTips() {
     return Row(
       children: [
         Expanded(
-          child: _buildQuickCard(
+          child: _buildTipCard(
             icon: Icons.image_outlined,
-            title: 'Vista previa',
-            subtitle: 'Revisa cómo se verá',
+            title: 'Actualiza foto',
+            subtitle: 'Haz tu producto más atractivo',
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildQuickCard(
-            icon: Icons.edit_note_rounded,
-            title: 'Datos del producto',
-            subtitle: 'Actualiza y guarda cambios',
+          child: _buildTipCard(
+            icon: Icons.inventory_2_outlined,
+            title: 'Stock al día',
+            subtitle: 'Evita publicar datos desactualizados',
           ),
         ),
       ],
     );
   }
 
-  Widget _buildQuickCard({
+  Widget _buildTipCard({
     required IconData icon,
     required String title,
     required String subtitle,
@@ -641,40 +1022,6 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildFieldHeader({
-    required String title,
-    required IconData icon,
-  }) {
-    return Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF5F0E8),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            icon,
-            color: const Color(0xFFC69A5B),
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF4E3426),
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -846,6 +1193,141 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     );
   }
 
+  Widget _buildImagePickerCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFieldHeader(
+            title: 'Foto del producto',
+            icon: Icons.photo_camera_back_outlined,
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Cambia la foto del producto desde la galería o toma una nueva con tu cámara.',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: Color(0xFF8C7B6B),
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: _hasImage()
+                ? Container(
+              key: ValueKey(
+                _selectedImageFile?.path ??
+                    _imageBase64OrUrl ??
+                    'stored_image',
+              ),
+              child: _buildProductImage(
+                width: double.infinity,
+                height: 220,
+                borderRadius: BorderRadius.circular(18),
+                placeholderIcon: Icons.broken_image_outlined,
+                placeholderIconColor: const Color(0xFF8A6A45),
+              ),
+            )
+                : Container(
+              key: const ValueKey('image_placeholder'),
+              width: double.infinity,
+              height: 180,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F5EF),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFE6DDCF)),
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.image_outlined,
+                    size: 42,
+                    color: Color(0xFFC69A5B),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'Aún no seleccionaste una imagen',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF8C7B6B),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _isPickingImage ? null : _showImageSourceSheet,
+                  icon: _isPickingImage
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      color: Colors.white,
+                    ),
+                  )
+                      : const Icon(Icons.add_a_photo_outlined, size: 18),
+                  label: Text(
+                    _hasImage() ? 'Cambiar foto' : 'Elegir foto',
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC69A5B),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              if (_hasImage()) ...[
+                const SizedBox(width: 10),
+                OutlinedButton(
+                  onPressed: _isPickingImage ? null : _clearSelectedImage,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFD96C2F),
+                    side: const BorderSide(color: Color(0xFFE6DDCF)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  child: const Text('Quitar'),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDateCard() {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -922,7 +1404,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
   }
 
   Widget _buildStatusCard() {
-    final color = _statusColor();
+    final statusColor = _getStatusColor();
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -943,7 +1425,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildFieldHeader(
-            title: 'Estado del producto',
+            title: 'Estado de publicación',
             icon: Icons.toggle_on_outlined,
           ),
           const SizedBox(height: 14),
@@ -970,9 +1452,9 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.10),
+              color: statusColor.withOpacity(0.10),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: color.withOpacity(0.18)),
+              border: Border.all(color: statusColor.withOpacity(0.18)),
             ),
             child: Row(
               children: [
@@ -981,7 +1463,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                       ? Icons.check_circle_outline_rounded
                       : Icons.pause_circle_outline_rounded,
                   size: 18,
-                  color: color,
+                  color: statusColor,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -991,7 +1473,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                         : 'El producto quedará oculto temporalmente.',
                     style: TextStyle(
                       fontSize: 12.5,
-                      color: color,
+                      color: statusColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1039,15 +1521,12 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
               size: 18,
             ),
             const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected ? color : const Color(0xFF5A3E2B),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                ),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected ? color : const Color(0xFF5A3E2B),
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
               ),
             ),
           ],
@@ -1057,8 +1536,6 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
   }
 
   Widget _buildPreviewCard() {
-    final hasImage = _imageController.text.trim().isNotEmpty;
-
     return Container(
       margin: const EdgeInsets.only(top: 4),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -1113,20 +1590,16 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                       color: const Color(0xFFF5F0E8),
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: hasImage
-                        ? ClipRRect(
+                    child: _hasImage()
+                        ? _buildProductImage(
+                      width: 96,
+                      height: 96,
                       borderRadius: BorderRadius.circular(20),
-                      child: Image.network(
-                        _imageController.text.trim(),
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) {
-                          return const Icon(
-                            Icons.image_not_supported_outlined,
-                            color: Color(0xFF888888),
-                            size: 38,
-                          );
-                        },
-                      ),
+                      placeholderIcon:
+                      Icons.image_not_supported_outlined,
+                      placeholderIconColor: const Color(0xFF888888),
+                      placeholderBackground: const Color(0xFFF5F0E8),
+                      placeholderIconSize: 38,
                     )
                         : const Icon(
                       Icons.inventory_2_outlined,
@@ -1160,10 +1633,10 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: _statusColor().withOpacity(0.11),
+                                color: _getStatusColor().withOpacity(0.11),
                                 borderRadius: BorderRadius.circular(14),
                                 border: Border.all(
-                                  color: _statusColor().withOpacity(0.18),
+                                  color: _getStatusColor().withOpacity(0.18),
                                 ),
                               ),
                               child: Text(
@@ -1171,7 +1644,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                 style: TextStyle(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w700,
-                                  color: _statusColor(),
+                                  color: _getStatusColor(),
                                 ),
                               ),
                             ),
@@ -1216,7 +1689,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                         _buildPreviewInfo(
                           Icons.calendar_month_outlined,
                           _harvestDate == null
-                              ? 'Fecha pendiente'
+                              ? 'Fecha de cosecha pendiente'
                               : _formatDate(_harvestDate),
                           const Color(0xFF2E8B57),
                         ),
@@ -1254,11 +1727,13 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
   Widget _buildSaveButton() {
     return Consumer<ProductController>(
       builder: (context, productController, child) {
+        final isBusy = productController.isLoading || _isSubmitting;
+
         return SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: productController.isLoading ? null : _saveProduct,
-            icon: productController.isLoading
+            onPressed: isBusy ? null : _saveProduct,
+            icon: isBusy
                 ? const SizedBox(
               width: 18,
               height: 18,
@@ -1269,7 +1744,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
             )
                 : const Icon(Icons.save_outlined),
             label: Text(
-              productController.isLoading ? 'Guardando...' : 'Guardar cambios',
+              isBusy ? 'Guardando...' : 'Guardar cambios',
               style: const TextStyle(
                 fontSize: 15.5,
                 fontWeight: FontWeight.w700,
@@ -1328,7 +1803,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                         const SizedBox(height: 18),
                         _buildHeroBanner(),
                         const SizedBox(height: 18),
-                        _buildQuickCards(),
+                        _buildQuickTips(),
                         const SizedBox(height: 18),
                         Container(
                           width: double.infinity,
@@ -1367,7 +1842,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                               ),
                               const SizedBox(height: 6),
                               const Text(
-                                'Actualiza los datos principales, el inventario y la presentación visual del producto.',
+                                'Actualiza cada campo para que tu publicación se vea clara, atractiva y profesional.',
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   color: Color(0xFF8C7B6B),
@@ -1483,13 +1958,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                 icon: Icons.notes_rounded,
                                 maxLines: 4,
                               ),
-                              _buildInputCard(
-                                title: 'URL de la imagen',
-                                hint: 'https://...',
-                                controller: _imageController,
-                                icon: Icons.image_outlined,
-                                customValidator: _validateImageUrl,
-                              ),
+                              _buildImagePickerCard(),
                               _buildDateCard(),
                               _buildPreviewCard(),
                               const SizedBox(height: 22),

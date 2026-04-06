@@ -1,12 +1,17 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/coin_movement_controller.dart';
+import '../../controllers/request_controller.dart';
 import '../../controllers/user_controller.dart';
-import '../../models/coin_movement_model.dart';
+import '../../core/image_helper.dart';
+import '../../models/app_config_model.dart';
+import '../../models/request_model.dart';
 import 'producer_dashboard_view.dart';
 import 'producer_products_view.dart';
 import 'producer_profile_view.dart';
@@ -21,6 +26,13 @@ class ProducerCoinsView extends StatefulWidget {
 class _ProducerCoinsViewState extends State<ProducerCoinsView> {
   bool _initialLoadDone = false;
   DateTime? _lastUpdatedAt;
+  RequestController? _requestController;
+
+  final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+
+  File? _selectedProofFile;
 
   static const Color _bgTop = Color(0xFFF8F2EA);
   static const Color _bgMid = Color(0xFFF3EADF);
@@ -42,8 +54,58 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      _requestController = context.read<RequestController>();
       await _loadInitialData();
+      if (!mounted) return;
+      _configureRequestListener();
     });
+  }
+
+  @override
+  void dispose() {
+    _requestController?.onRequestStatusChanged = null;
+    _amountController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  void _configureRequestListener() {
+    final requestController = context.read<RequestController>();
+    final userController = context.read<UserController>();
+    final coinController = context.read<CoinMovementController>();
+
+    requestController.onRequestStatusChanged = (request) async {
+      if (!mounted) return;
+
+      await userController.reloadCurrentUser();
+      if (!mounted) return;
+
+      final user = userController.currentUser;
+      if (user?.id != null) {
+        await coinController.loadCoinData(user!.id!);
+        await requestController.loadUserRequests(user.id!);
+      }
+
+      if (!mounted) return;
+
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      messenger?.hideCurrentSnackBar();
+      messenger?.showSnackBar(
+        SnackBar(
+          backgroundColor: request.state == 1 ? _green : _danger,
+          content: Text(
+            request.state == 1
+                ? 'Tu solicitud fue aprobada. Las monedas ya fueron acreditadas.'
+                : 'Tu solicitud de recarga fue rechazada.',
+          ),
+        ),
+      );
+
+      setState(() {
+        _lastUpdatedAt = DateTime.now();
+      });
+    };
   }
 
   Future<void> _loadInitialData() async {
@@ -51,6 +113,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
 
     final userController = context.read<UserController>();
     final coinController = context.read<CoinMovementController>();
+    final requestController = context.read<RequestController>();
     final user = userController.currentUser;
 
     if (user == null || user.id == null || user.id! <= 0) {
@@ -60,9 +123,15 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
       return;
     }
 
-    await coinController.loadCoinData(user.id!);
+    await Future.wait([
+      coinController.loadCoinData(user.id!),
+      requestController.loadConfig(),
+      requestController.loadUserRequests(user.id!),
+      requestController.resumePollingIfNeeded(user.id!),
+    ]);
 
     if (!mounted) return;
+
     setState(() {
       _initialLoadDone = true;
       _lastUpdatedAt = DateTime.now();
@@ -74,13 +143,21 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
 
     final userController = context.read<UserController>();
     final coinController = context.read<CoinMovementController>();
+    final requestController = context.read<RequestController>();
     final user = userController.currentUser;
 
     if (user == null || user.id == null || user.id! <= 0) return;
 
-    await coinController.loadCoinData(user.id!);
+    await Future.wait([
+      coinController.loadCoinData(user.id!),
+      requestController.loadConfig(),
+      requestController.loadUserRequests(user.id!),
+      requestController.resumePollingIfNeeded(user.id!),
+      userController.reloadCurrentUser(),
+    ]);
 
     if (!mounted) return;
+
     setState(() {
       _lastUpdatedAt = DateTime.now();
     });
@@ -90,9 +167,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     if (!mounted) return;
     await Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ProducerDashboardView(),
-      ),
+      MaterialPageRoute(builder: (_) => const ProducerDashboardView()),
     );
   }
 
@@ -100,9 +175,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     if (!mounted) return;
     await Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ProducerProductsView(),
-      ),
+      MaterialPageRoute(builder: (_) => const ProducerProductsView()),
     );
   }
 
@@ -110,9 +183,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     if (!mounted) return;
     await Navigator.pushReplacement(
       context,
-      MaterialPageRoute(
-        builder: (_) => const ProducerProfileView(),
-      ),
+      MaterialPageRoute(builder: (_) => const ProducerProfileView()),
     );
   }
 
@@ -140,352 +211,422 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     final scaffoldMessenger = ScaffoldMessenger.maybeOf(pageContext);
     final userController = pageContext.read<UserController>();
     final coinController = pageContext.read<CoinMovementController>();
+    final requestController = pageContext.read<RequestController>();
     final user = userController.currentUser;
 
     if (user == null || user.id == null || user.id! <= 0) {
       scaffoldMessenger?.hideCurrentSnackBar();
       scaffoldMessenger?.showSnackBar(
-        const SnackBar(
-          content: Text('No se encontró un productor válido.'),
-        ),
+        const SnackBar(content: Text('No se encontró un productor válido.')),
       );
       return;
     }
 
-    final amountController = TextEditingController();
-    final descriptionController = TextEditingController();
+    _amountController.clear();
+    _descriptionController.clear();
+    _selectedProofFile = null;
 
-    try {
-      final result = await showModalBottomSheet<bool>(
-        context: pageContext,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (sheetContext) {
-          bool isSubmitting = false;
+    final result = await showModalBottomSheet<bool>(
+      context: pageContext,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        bool isSubmitting = false;
 
-          return StatefulBuilder(
-            builder: (modalContext, setSheetState) {
-              Future<void> submitRequest() async {
-                final amountText = amountController.text.trim();
-                final description = descriptionController.text.trim();
+        return StatefulBuilder(
+          builder: (modalContext, setSheetState) {
+            final bsPerCoin = requestController.config.bsPerCoin <= 0
+                ? 100.0
+                : requestController.config.bsPerCoin;
 
-                if (amountText.isEmpty) {
-                  scaffoldMessenger?.hideCurrentSnackBar();
-                  scaffoldMessenger?.showSnackBar(
-                    const SnackBar(
-                      content: Text('Ingresa la cantidad de monedas.'),
-                    ),
-                  );
-                  return;
-                }
+            final coinsText = _amountController.text.trim();
+            final coinsValue = int.tryParse(coinsText);
+            final amountToPay = (coinsValue == null || coinsValue <= 0)
+                ? 0.0
+                : coinsValue * bsPerCoin;
 
-                final amount = double.tryParse(amountText);
+            Future<void> pickProof() async {
+              final picked = await _picker.pickImage(
+                source: ImageSource.gallery,
+                imageQuality: 80,
+                maxWidth: 1280,
+                maxHeight: 1280,
+              );
 
-                if (amount == null || amount <= 0) {
-                  scaffoldMessenger?.hideCurrentSnackBar();
-                  scaffoldMessenger?.showSnackBar(
-                    const SnackBar(
-                      content: Text('Ingresa una cantidad válida de monedas.'),
-                    ),
-                  );
-                  return;
-                }
+              if (picked == null) return;
 
-                if (amount != amount.toInt().toDouble()) {
-                  scaffoldMessenger?.hideCurrentSnackBar();
-                  scaffoldMessenger?.showSnackBar(
-                    const SnackBar(
-                      content: Text('La cantidad de monedas debe ser entera.'),
-                    ),
-                  );
-                  return;
-                }
+              final file = File(picked.path);
+              final imageProvider = FileImage(file);
 
-                if (isSubmitting) return;
+              await precacheImage(imageProvider, modalContext);
 
-                if (sheetContext.mounted) {
-                  setSheetState(() {
-                    isSubmitting = true;
-                  });
-                }
+              if (!modalContext.mounted) return;
 
-                bool success = false;
+              setSheetState(() {
+                _selectedProofFile = file;
+              });
+            }
 
-                try {
-                  success = await coinController.requestRecharge(
-                    userId: user.id!,
-                    amount: amount,
-                    description: description.isEmpty ? null : description,
-                  );
-                } catch (_) {
-                  success = false;
-                }
+            Future<void> submitRequest() async {
+              final amountText = _amountController.text.trim();
 
-                if (!mounted) return;
-
-                if (sheetContext.mounted) {
-                  setSheetState(() {
-                    isSubmitting = false;
-                  });
-                }
-
-                if (success) {
-                  if (Navigator.of(sheetContext).canPop()) {
-                    Navigator.of(sheetContext).pop(true);
-                  }
-                  return;
-                }
-
+              if (amountText.isEmpty) {
                 scaffoldMessenger?.hideCurrentSnackBar();
                 scaffoldMessenger?.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      coinController.errorMessage ??
-                          'No se pudo registrar la solicitud de recarga.',
-                    ),
+                  const SnackBar(
+                    content: Text('Ingresa la cantidad de monedas.'),
                   ),
                 );
+                return;
               }
 
-              final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+              final coins = int.tryParse(amountText);
 
-              return Padding(
-                padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
-                child: Material(
-                  color: Colors.transparent,
-                  child: SingleChildScrollView(
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: _card,
-                        borderRadius: BorderRadius.circular(30),
-                        border: Border.all(color: _border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.12),
-                            blurRadius: 24,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 58,
-                                height: 58,
-                                decoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [_primary, Color(0xFFB9854A)],
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                  ),
-                                  borderRadius: BorderRadius.circular(18),
-                                ),
-                                child: const Icon(
-                                  Icons.add_card_rounded,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              const Expanded(
-                                child: Text(
-                                  'Solicitar recarga',
-                                  style: TextStyle(
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.w800,
-                                    color: _brownText,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'El administrador deberá aprobar la solicitud para que las monedas aparezcan en tu saldo.',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: _softText,
-                              height: 1.45,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          TextField(
-                            controller: amountController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [
-                              FilteringTextInputFormatter.digitsOnly,
-                            ],
-                            decoration: InputDecoration(
-                              labelText: 'Cantidad de monedas',
-                              hintText: 'Ejemplo: 5',
-                              filled: true,
-                              fillColor: const Color(0xFFFBF8F3),
-                              labelStyle: const TextStyle(color: _softText),
-                              hintStyle: const TextStyle(color: _softText),
-                              prefixIcon: const Icon(
-                                Icons.monetization_on_outlined,
-                                color: _primaryDark,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: const BorderSide(color: _border),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: const BorderSide(color: _border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: const BorderSide(color: _primary),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          TextField(
-                            controller: descriptionController,
-                            maxLines: 3,
-                            decoration: InputDecoration(
-                              labelText: 'Descripción opcional',
-                              hintText:
-                              'Ejemplo: Recarga para publicar nuevos productos',
-                              filled: true,
-                              fillColor: const Color(0xFFFBF8F3),
-                              labelStyle: const TextStyle(color: _softText),
-                              hintStyle: const TextStyle(color: _softText),
-                              alignLabelWithHint: true,
-                              prefixIcon: const Padding(
-                                padding: EdgeInsets.only(bottom: 46),
-                                child: Icon(
-                                  Icons.edit_note_rounded,
-                                  color: _primaryDark,
-                                ),
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: const BorderSide(color: _border),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: const BorderSide(color: _border),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: const BorderSide(color: _primary),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8F4EC),
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: const Color(0xFFE6DDCF)),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(
-                                  Icons.info_outline_rounded,
-                                  color: _primaryDark,
-                                  size: 18,
-                                ),
-                                SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'Regla actual: 1 moneda = 100',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      color: _primaryDark,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          OverflowBar(
-                            spacing: 12,
-                            overflowSpacing: 12,
-                            alignment: MainAxisAlignment.end,
-                            children: [
-                              OutlinedButton(
-                                onPressed: isSubmitting
-                                    ? null
-                                    : () {
-                                  if (Navigator.of(sheetContext).canPop()) {
-                                    Navigator.of(sheetContext).pop(false);
-                                  }
-                                },
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(120, 52),
-                                  side: const BorderSide(color: _border),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                child: const Text('Cancelar'),
-                              ),
-                              ElevatedButton(
-                                onPressed: isSubmitting ? null : submitRequest,
-                                style: ElevatedButton.styleFrom(
-                                  minimumSize: const Size(145, 52),
-                                  backgroundColor: _primary,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                ),
-                                child: isSubmitting
-                                    ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                    color: Colors.white,
-                                  ),
-                                )
-                                    : const Text(
-                                  'Solicitar',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+              if (coins == null || coins <= 0) {
+                scaffoldMessenger?.hideCurrentSnackBar();
+                scaffoldMessenger?.showSnackBar(
+                  const SnackBar(
+                    content: Text('Ingresa una cantidad válida de monedas.'),
+                  ),
+                );
+                return;
+              }
+
+              if (_selectedProofFile == null) {
+                scaffoldMessenger?.hideCurrentSnackBar();
+                scaffoldMessenger?.showSnackBar(
+                  const SnackBar(
+                    content: Text('Debes adjuntar el comprobante de pago.'),
+                  ),
+                );
+                return;
+              }
+
+              if (isSubmitting) return;
+              if (!modalContext.mounted) return;
+
+              setSheetState(() {
+                isSubmitting = true;
+              });
+
+              bool success = false;
+
+              try {
+                final imageBase64 = await ImageHelper.toBase64(_selectedProofFile!);
+
+                if (imageBase64 == null || imageBase64.isEmpty) {
+                  throw Exception('No se pudo convertir la imagen.');
+                }
+
+                success = await requestController.submitRequest(
+                  userID: user.id!,
+                  coins: coins,
+                  amount: coins * bsPerCoin,
+                  imageUrl: imageBase64,
+                );
+
+                if (success) {
+                  await userController.reloadCurrentUser();
+                  await coinController.loadCoinData(user.id!);
+                  await requestController.loadUserRequests(user.id!);
+                  await requestController.resumePollingIfNeeded(user.id!);
+                }
+              } catch (_) {
+                success = false;
+              }
+
+              if (!mounted) return;
+              if (!modalContext.mounted) return;
+
+              setSheetState(() {
+                isSubmitting = false;
+              });
+
+              if (success) {
+                if (Navigator.of(sheetContext).canPop()) {
+                  Navigator.of(sheetContext).pop(true);
+                }
+                return;
+              }
+
+              scaffoldMessenger?.hideCurrentSnackBar();
+              scaffoldMessenger?.showSnackBar(
+                SnackBar(
+                  content: Text(
+                    requestController.errorMessage ??
+                        coinController.errorMessage ??
+                        'No se pudo registrar la solicitud de recarga.',
                   ),
                 ),
               );
-            },
-          );
-        },
-      );
+            }
 
-      if (!mounted) return;
+            final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
 
-      if (result == true) {
-        scaffoldMessenger?.hideCurrentSnackBar();
-        scaffoldMessenger?.showSnackBar(
-          const SnackBar(
-            content: Text('Solicitud de recarga enviada correctamente.'),
-          ),
+            return Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, bottomInset + 16),
+              child: Material(
+                color: Colors.transparent,
+                child: SingleChildScrollView(
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: _card,
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: _border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 24,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 58,
+                              height: 58,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [_primary, Color(0xFFB9854A)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              child: const Icon(
+                                Icons.add_card_rounded,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'Solicitar recarga',
+                                style: TextStyle(
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w800,
+                                  color: _brownText,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Haz tu pago, adjunta el comprobante y luego envía la solicitud. El administrador deberá aprobarla para que las monedas aparezcan en tu saldo.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: _softText,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        _buildQrPaymentCard(
+                          config: requestController.config,
+                          compact: true,
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: _amountController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          onChanged: (_) {
+                            if (!modalContext.mounted) return;
+                            setSheetState(() {});
+                          },
+                          decoration: InputDecoration(
+                            labelText: 'Cantidad de monedas',
+                            hintText: 'Ejemplo: 5',
+                            filled: true,
+                            fillColor: const Color(0xFFFBF8F3),
+                            labelStyle: const TextStyle(color: _softText),
+                            hintStyle: const TextStyle(color: _softText),
+                            prefixIcon: const Icon(
+                              Icons.monetization_on_outlined,
+                              color: _primaryDark,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(color: _border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(color: _border),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(color: _primary),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFCF6),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: _divider),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Resumen del pago',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: _primaryDark,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _buildSummaryLine(
+                                'Monedas',
+                                '${coinsValue ?? 0}',
+                              ),
+                              _buildSummaryLine(
+                                'Bs por moneda',
+                                bsPerCoin.toStringAsFixed(2),
+                              ),
+                              _buildSummaryLine(
+                                'Total a pagar',
+                                'Bs ${amountToPay.toStringAsFixed(2)}',
+                                highlight: true,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: _descriptionController,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            labelText: 'Descripción opcional',
+                            hintText:
+                            'Ejemplo: Recarga para publicar nuevos productos',
+                            filled: true,
+                            fillColor: const Color(0xFFFBF8F3),
+                            labelStyle: const TextStyle(color: _softText),
+                            hintStyle: const TextStyle(color: _softText),
+                            alignLabelWithHint: true,
+                            prefixIcon: const Padding(
+                              padding: EdgeInsets.only(bottom: 46),
+                              child: Icon(
+                                Icons.edit_note_rounded,
+                                color: _primaryDark,
+                              ),
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(color: _border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(color: _border),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(color: _primary),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        _buildProofPicker(
+                          file: _selectedProofFile,
+                          onPick: isSubmitting ? null : pickProof,
+                          compact: true,
+                        ),
+                        const SizedBox(height: 20),
+                        OverflowBar(
+                          spacing: 12,
+                          overflowSpacing: 12,
+                          alignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton(
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () {
+                                if (Navigator.of(sheetContext).canPop()) {
+                                  Navigator.of(sheetContext).pop(false);
+                                }
+                              },
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size(120, 52),
+                                side: const BorderSide(color: _border),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Text('Cancelar'),
+                            ),
+                            ElevatedButton(
+                              onPressed: isSubmitting ? null : submitRequest,
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size(145, 52),
+                                backgroundColor: _primary,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: isSubmitting
+                                  ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              )
+                                  : const Text(
+                                'Enviar solicitud',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         );
-        await _refreshData();
-      }
-    } finally {
-      amountController.dispose();
-      descriptionController.dispose();
+      },
+    );
+
+    if (!mounted) return;
+
+    _amountController.clear();
+    _descriptionController.clear();
+
+    if (mounted) {
+      setState(() {
+        _selectedProofFile = null;
+      });
+    }
+
+    if (result == true) {
+      scaffoldMessenger?.hideCurrentSnackBar();
+      scaffoldMessenger?.showSnackBar(
+        const SnackBar(
+          content: Text('Solicitud de recarga enviada correctamente.'),
+        ),
+      );
+      await _refreshData();
     }
   }
 
@@ -493,17 +634,19 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
   Widget build(BuildContext context) {
     final userController = context.watch<UserController>();
     final coinController = context.watch<CoinMovementController>();
-    final user = userController.currentUser;
-    final movements = coinController.movements;
+    final requestController = context.watch<RequestController>();
 
-    final pendingCount = _countByStatus(movements, 'Pendiente');
-    final approvedCount = _countByStatus(movements, 'Aprobado');
-    final rejectedCount = _countByStatus(movements, 'Rechazado');
-    final registeredCount = _countByStatus(movements, 'Registrado');
+    final user = userController.currentUser;
+    final requests = requestController.userRequests;
+
+    final pendingCount = _countRequestsByState(requests, 0);
+    final approvedCount = _countRequestsByState(requests, 1);
+    final rejectedCount = _countRequestsByState(requests, 2);
 
     final screenWidth = MediaQuery.of(context).size.width;
-    final isInitialLoading =
-        !_initialLoadDone && coinController.isLoading && movements.isEmpty;
+    final isInitialLoading = !_initialLoadDone &&
+        (coinController.isLoading || requestController.isLoading) &&
+        requests.isEmpty;
 
     return Scaffold(
       extendBody: true,
@@ -514,7 +657,9 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
         child: FloatingActionButton.extended(
           backgroundColor: _primary,
           elevation: 12,
-          onPressed: coinController.isBusy ? null : _showRechargeDialog,
+          onPressed: (coinController.isBusy || requestController.isLoading)
+              ? null
+              : _showRechargeDialog,
           icon: const Icon(Icons.add_card_rounded, color: Colors.white),
           label: const Text(
             'Solicitar',
@@ -589,7 +734,8 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _buildTopBar(
-                              isBusy: coinController.isBusy,
+                              isBusy: coinController.isBusy ||
+                                  requestController.isLoading,
                               pendingCount: pendingCount,
                             ),
                             const SizedBox(height: 18),
@@ -599,10 +745,12 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                               _buildHeroCard(
                                 producerName: user.name,
                                 balance: coinController.balance,
-                                balanceInMoney: coinController.balanceInMoney,
-                                requestCount: movements.length,
+                                balanceInMoney:
+                                coinController.balanceInMoney,
+                                requestCount: requests.length,
                                 pendingCount: pendingCount,
-                                isBusy: coinController.isBusy,
+                                isBusy: coinController.isBusy ||
+                                    requestController.isLoading,
                               ),
                               const SizedBox(height: 18),
                               _buildSectionContainer(
@@ -611,9 +759,19 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                                 'Vista rápida y clara del estado actual de tu billetera.',
                                 child: _buildOverviewCards(
                                   balance: coinController.balance,
-                                  balanceInMoney: coinController.balanceInMoney,
-                                  requestCount: movements.length,
+                                  balanceInMoney:
+                                  coinController.balanceInMoney,
+                                  requestCount: requests.length,
                                   pendingCount: pendingCount,
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              _buildSectionContainer(
+                                title: 'Método de pago',
+                                subtitle:
+                                'Usa el mismo flujo del cliente: revisa el QR, calcula el monto y adjunta tu comprobante.',
+                                child: _buildQrPaymentCard(
+                                  config: requestController.config,
                                 ),
                               ),
                               const SizedBox(height: 18),
@@ -625,7 +783,6 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                                   pendingCount: pendingCount,
                                   approvedCount: approvedCount,
                                   rejectedCount: rejectedCount,
-                                  registeredCount: registeredCount,
                                 ),
                               ),
                               const SizedBox(height: 18),
@@ -636,7 +793,8 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                                 child: _buildActionsSection(
                                   onRequestRecharge: _showRechargeDialog,
                                   onRefresh: _refreshData,
-                                  isBusy: coinController.isBusy,
+                                  isBusy: coinController.isBusy ||
+                                      requestController.isLoading,
                                 ),
                               ),
                               const SizedBox(height: 18),
@@ -644,28 +802,35 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                                 title: 'Información importante',
                                 subtitle:
                                 'Reglas y contexto útil para el uso de monedas.',
-                                child: _buildQuickInfoCard(),
+                                child: _buildQuickInfoCard(
+                                  bsPerCoin:
+                                  requestController.config.bsPerCoin,
+                                ),
                               ),
                               const SizedBox(height: 18),
                               _buildSectionContainer(
                                 title: 'Historial de solicitudes',
                                 subtitle:
-                                'Aquí puedes revisar tus recargas y su estado actual.',
+                                'Aquí puedes revisar tus recargas, el estado y el comprobante enviado.',
                                 child: Column(
                                   children: [
-                                    if (coinController.hasError)
+                                    if (requestController.errorMessage !=
+                                        null &&
+                                        requestController.errorMessage!
+                                            .trim()
+                                            .isNotEmpty)
                                       Padding(
-                                        padding:
-                                        const EdgeInsets.only(bottom: 12),
+                                        padding: const EdgeInsets.only(
+                                          bottom: 12,
+                                        ),
                                         child: _buildErrorCard(
-                                          coinController.errorMessage!,
+                                          requestController.errorMessage!,
                                         ),
                                       ),
-                                    _buildMovementsContent(
-                                      movements: movements,
+                                    _buildRequestsContent(
+                                      requests: requests,
                                       isLoading:
-                                      coinController.isLoadingMovements ||
-                                          coinController.isLoading,
+                                      requestController.isLoading,
                                     ),
                                   ],
                                 ),
@@ -699,10 +864,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 
@@ -872,7 +1034,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
           ),
           SizedBox(height: 8),
           Text(
-            'Estamos trayendo tu saldo y el historial de solicitudes.',
+            'Estamos trayendo tu saldo, QR y el historial de solicitudes.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: _softText,
@@ -908,11 +1070,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
           child: const Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.person_off_rounded,
-                size: 58,
-                color: _primaryDark,
-              ),
+              Icon(Icons.person_off_rounded, size: 58, color: _primaryDark),
               SizedBox(height: 16),
               Text(
                 'No se encontró una sesión activa del productor.',
@@ -1031,8 +1189,8 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                       text: 'Datos reales',
                     ),
                     _buildHeroChip(
-                      icon: Icons.bolt_outlined,
-                      text: 'Recarga rápida',
+                      icon: Icons.qr_code_2_rounded,
+                      text: 'Pago con QR',
                     ),
                   ],
                 ),
@@ -1103,7 +1261,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
                     ),
                     _buildHeroStat(
                       label: 'Regla actual',
-                      value: '1 = 100',
+                      value: 'QR + comp.',
                     ),
                     _buildHeroStat(
                       label: 'Saldo visible',
@@ -1431,11 +1589,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
               color: item.accent.withOpacity(0.12),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(
-              item.icon,
-              color: item.accent,
-              size: 22,
-            ),
+            child: Icon(item.icon, color: item.accent, size: 22),
           ),
           const Spacer(),
           Text(
@@ -1460,9 +1614,301 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
           const SizedBox(height: 4),
           Text(
             item.subtitle,
-            style: const TextStyle(
-              fontSize: 11.5,
+            style: const TextStyle(fontSize: 11.5, color: _softText),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQrPaymentCard({
+    required AppConfigModel config,
+    bool compact = false,
+  }) {
+    final bsPerCoin = config.bsPerCoin <= 0 ? 100.0 : config.bsPerCoin;
+    final qrImage = config.qrImage;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 14 : 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _divider),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final vertical = constraints.maxWidth < 560 || compact;
+
+          final qrWidget = Container(
+            width: vertical ? double.infinity : 160,
+            constraints: const BoxConstraints(minHeight: 160),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _divider),
+            ),
+            padding: const EdgeInsets.all(10),
+            child: qrImage != null && qrImage.trim().isNotEmpty
+                ? AppImage(
+              src: qrImage,
+              borderRadius: 16,
+              fit: BoxFit.contain,
+              placeholder: const Center(
+                child: Icon(
+                  Icons.qr_code_2_rounded,
+                  size: 72,
+                  color: _primaryDark,
+                ),
+              ),
+            )
+                : const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.qr_code_2_rounded,
+                    size: 72,
+                    color: _primaryDark,
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'QR no configurado',
+                    style: TextStyle(
+                      color: _softText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          final infoWidget = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pago por QR',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: _brownText,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '1 moneda = Bs ${bsPerCoin.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _primaryDark,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Sigue estos pasos:',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: _brownText,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _buildMiniStep('1', 'Escanea el QR o realiza el pago.'),
+              _buildMiniStep('2', 'Calcula el monto según tus monedas.'),
+              _buildMiniStep(
+                '3',
+                'Adjunta el comprobante y envía tu solicitud.',
+              ),
+            ],
+          );
+
+          if (vertical) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                qrWidget,
+                const SizedBox(height: 14),
+                infoWidget,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              qrWidget,
+              const SizedBox(width: 16),
+              Expanded(child: infoWidget),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMiniStep(String number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: _primary.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              number,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: _primaryDark,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 13.2,
+                color: _softText,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryLine(
+      String label,
+      String value, {
+        bool highlight = false,
+      }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                color: _softText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13.5,
+              color: highlight ? _primaryDark : _brownText,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProofPicker({
+    required File? file,
+    required VoidCallback? onPick,
+    bool compact = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 14 : 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Comprobante de pago',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: _brownText,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Adjunta una captura o foto del comprobante. Este campo es obligatorio para que se parezca al flujo del cliente.',
+            style: TextStyle(
+              fontSize: 13,
               color: _softText,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (file != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.file(
+                file,
+                width: double.infinity,
+                height: compact ? 170 : 220,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                filterQuality: FilterQuality.medium,
+                frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                  if (wasSynchronouslyLoaded || frame != null) {
+                    return child;
+                  }
+
+                  return Container(
+                    width: double.infinity,
+                    height: compact ? 170 : 220,
+                    color: const Color(0xFFF8F4EC),
+                    alignment: Alignment.center,
+                    child: const CircularProgressIndicator(color: _primary),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: double.infinity,
+                    height: compact ? 170 : 220,
+                    color: const Color(0xFFF8F4EC),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.broken_image_rounded,
+                      color: _primaryDark,
+                      size: 40,
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onPick,
+              icon: const Icon(Icons.upload_file_rounded),
+              label: Text(
+                file == null ? 'Adjuntar comprobante' : 'Cambiar comprobante',
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                foregroundColor: _primaryDark,
+                side: const BorderSide(color: _border),
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
             ),
           ),
         ],
@@ -1474,7 +1920,6 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     required int pendingCount,
     required int approvedCount,
     required int rejectedCount,
-    required int registeredCount,
   }) {
     final items = [
       _StatusMiniData(
@@ -1498,26 +1943,25 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
         color: _danger,
         bg: const Color(0xFFFFEFEF),
       ),
-      _StatusMiniData(
-        label: 'Registrado',
-        value: registeredCount.toString(),
-        icon: Icons.receipt_long_rounded,
-        color: _primaryDark,
-        bg: const Color(0xFFF4EEE5),
-      ),
     ];
 
-    return GridView.builder(
-      itemCount: items.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.45,
-      ),
-      itemBuilder: (_, index) => _buildStatusMiniCard(items[index]),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth > 900 ? 3 : 1;
+
+        return GridView.builder(
+          itemCount: items.length,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: crossAxisCount == 1 ? 3.6 : 1.7,
+          ),
+          itemBuilder: (_, index) => _buildStatusMiniCard(items[index]),
+        );
+      },
     );
   }
 
@@ -1556,7 +2000,11 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     );
   }
 
-  Widget _buildQuickInfoCard() {
+  Widget _buildQuickInfoCard({
+    required double bsPerCoin,
+  }) {
+    final rate = bsPerCoin <= 0 ? 100.0 : bsPerCoin;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -1565,42 +2013,66 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _divider),
       ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          Icon(
-            Icons.info_outline_rounded,
-            color: _primaryDark,
+          const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded, color: _primaryDark),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Información importante',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: _brownText,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Las recargas se registran como solicitudes y deben ser aprobadas por el administrador. Ahora la vista del productor también muestra QR y comprobante, como el cliente.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: _softText,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          SizedBox(width: 12),
-          Expanded(
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F4EC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE6DDCF)),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Información importante',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: _brownText,
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Las recargas se registran como solicitudes y deben ser aprobadas por el administrador. El historial mostrado corresponde a esas solicitudes.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _softText,
-                    height: 1.4,
-                  ),
-                ),
-                SizedBox(height: 12),
-                Text(
-                  'Regla actual: 1 moneda = 100',
-                  style: TextStyle(
+                  'Regla actual: 1 moneda = Bs ${rate.toStringAsFixed(2)}',
+                  style: const TextStyle(
                     fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     color: _primaryDark,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Tu saldo no sube automáticamente al enviar la solicitud. Primero queda pendiente y luego el admin la aprueba o rechaza.',
+                  style: TextStyle(
+                    fontSize: 12.8,
+                    color: _softText,
+                    height: 1.35,
                   ),
                 ),
               ],
@@ -1727,10 +2199,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: _danger,
-          ),
+          const Icon(Icons.error_outline_rounded, color: _danger),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1747,22 +2216,18 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     );
   }
 
-  Widget _buildMovementsContent({
-    required List<CoinMovementModel> movements,
+  Widget _buildRequestsContent({
+    required List<RequestModel> requests,
     required bool isLoading,
   }) {
-    if (isLoading && movements.isEmpty) {
+    if (isLoading && requests.isEmpty) {
       return const Padding(
         padding: EdgeInsets.only(top: 26),
-        child: Center(
-          child: CircularProgressIndicator(
-            color: _primary,
-          ),
-        ),
+        child: Center(child: CircularProgressIndicator(color: _primary)),
       );
     }
 
-    if (movements.isEmpty) {
+    if (requests.isEmpty) {
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
@@ -1790,7 +2255,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
             ),
             SizedBox(height: 8),
             Text(
-              'Cuando solicites una recarga, aquí podrás ver su estado y la fecha en que fue registrada.',
+              'Cuando solicites una recarga, aquí podrás ver el estado, el monto pagado y el comprobante enviado.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -1804,23 +2269,21 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     }
 
     return Column(
-      children: movements
+      children: requests
           .map(
-            (movement) => Padding(
+            (request) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _buildMovementCard(movement),
+          child: _buildRequestCard(request),
         ),
       )
           .toList(),
     );
   }
 
-  Widget _buildMovementCard(CoinMovementModel movement) {
-    final description = _safeDescription(movement.description);
-    final status = _extractStatus(description);
-    final statusColor = _statusColor(status);
-    final statusBackground = _statusBackground(status);
-    final statusIcon = _statusIcon(status);
+  Widget _buildRequestCard(RequestModel request) {
+    final stateColor = _stateColor(request.state);
+    final stateBackground = _stateBackground(request.state);
+    final stateIcon = _stateIcon(request.state);
 
     return Container(
       width: double.infinity,
@@ -1837,88 +2300,152 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: statusBackground,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(
-              statusIcon,
-              color: statusColor,
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  runSpacing: 8,
-                  spacing: 8,
-                  children: [
-                    Text(
-                      '${_formatCoins(movement.amount)} monedas',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: _brownText,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final vertical = constraints.maxWidth < 560;
+
+          final info = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                runSpacing: 8,
+                spacing: 8,
+                children: [
+                  Text(
+                    '${request.value} monedas',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: _brownText,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: stateBackground,
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    child: Text(
+                      request.stateLabel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: stateColor,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusBackground,
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: statusColor,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Monto pagado: Bs ${request.amount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: _softText,
+                  height: 1.4,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  description,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: _softText,
-                    height: 1.4,
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildSoftInfoChip(
+                    icon: Icons.schedule_rounded,
+                    text: _formatDateTime(
+                      request.registerDate ?? DateTime.now(),
+                    ),
+                  ),
+                  if (request.processedDate != null)
+                    _buildSoftInfoChip(
+                      icon: Icons.task_alt_rounded,
+                      text:
+                      'Procesado ${_formatDateTime(request.processedDate!)}',
+                    ),
+                ],
+              ),
+            ],
+          );
+
+          final thumb = Container(
+            width: vertical ? double.infinity : 106,
+            height: 106,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _divider),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: request.image.trim().isNotEmpty
+                  ? AppImage(
+                src: request.image,
+                fit: BoxFit.cover,
+                placeholder: const Center(
+                  child: Icon(
+                    Icons.receipt_long_outlined,
+                    color: _primaryDark,
+                    size: 34,
                   ),
                 ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+              )
+                  : const Center(
+                child: Icon(
+                  Icons.receipt_long_outlined,
+                  color: _primaryDark,
+                  size: 34,
+                ),
+              ),
+            ),
+          );
+
+          if (vertical) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    _buildSoftInfoChip(
-                      icon: Icons.schedule_rounded,
-                      text: _formatDateTime(movement.createdAt),
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: stateBackground,
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Icon(stateIcon, color: stateColor, size: 26),
                     ),
-                    _buildSoftInfoChip(
-                      icon: Icons.receipt_long_outlined,
-                      text: 'Solicitud registrada',
-                    ),
+                    const SizedBox(width: 14),
+                    Expanded(child: info),
                   ],
                 ),
+                const SizedBox(height: 12),
+                thumb,
               ],
-            ),
-          ),
-        ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: stateBackground,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(stateIcon, color: stateColor, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(child: info),
+              const SizedBox(width: 12),
+              thumb,
+            ],
+          );
+        },
       ),
     );
   }
@@ -2060,69 +2587,40 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     );
   }
 
-  int _countByStatus(List<CoinMovementModel> movements, String status) {
-    return movements
-        .where(
-          (movement) =>
-      _extractStatus(_safeDescription(movement.description)) == status,
-    )
-        .length;
+  int _countRequestsByState(List<RequestModel> requests, int state) {
+    return requests.where((request) => request.state == state).length;
   }
 
-  String _safeDescription(String? description) {
-    final text = (description ?? '').trim();
-    if (text.isEmpty) {
-      return 'Solicitud registrada en el sistema.';
-    }
-    return text;
-  }
-
-  String _extractStatus(String description) {
-    final text = description.toLowerCase();
-
-    if (text.contains('aprobado')) return 'Aprobado';
-    if (text.contains('rechazado')) return 'Rechazado';
-    if (text.contains('pendiente')) return 'Pendiente';
-
-    return 'Registrado';
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Aprobado':
+  Color _stateColor(int state) {
+    switch (state) {
+      case 1:
         return _green;
-      case 'Rechazado':
+      case 2:
         return _danger;
-      case 'Pendiente':
+      default:
         return _orange;
-      default:
-        return _primaryDark;
     }
   }
 
-  Color _statusBackground(String status) {
-    switch (status) {
-      case 'Aprobado':
+  Color _stateBackground(int state) {
+    switch (state) {
+      case 1:
         return const Color(0xFFEAF7EF);
-      case 'Rechazado':
+      case 2:
         return const Color(0xFFFFEFEF);
-      case 'Pendiente':
-        return const Color(0xFFFFF5E8);
       default:
-        return const Color(0xFFF4EEE5);
+        return const Color(0xFFFFF5E8);
     }
   }
 
-  IconData _statusIcon(String status) {
-    switch (status) {
-      case 'Aprobado':
+  IconData _stateIcon(int state) {
+    switch (state) {
+      case 1:
         return Icons.check_circle_rounded;
-      case 'Rechazado':
+      case 2:
         return Icons.cancel_rounded;
-      case 'Pendiente':
-        return Icons.hourglass_top_rounded;
       default:
-        return Icons.receipt_long_rounded;
+        return Icons.hourglass_top_rounded;
     }
   }
 

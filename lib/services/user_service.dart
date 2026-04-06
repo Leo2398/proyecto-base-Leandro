@@ -390,6 +390,85 @@ class UserService implements IUserService {
     }
   }
 
+  Future<bool> updateProducerProfileData({
+    required UserModel user,
+    required double latitude,
+    required double longitude,
+    required String address,
+  }) async {
+    try {
+      final conn = await _db.getConnection();
+      int? pickUpLocationID = user.pickUpLocationID;
+
+      /// Si ya existe un punto de recogida, actualiza Location y PickupLocation
+      if (pickUpLocationID != null) {
+        final updatedLocation = await _locationService.updateLocation(
+          locationId: pickUpLocationID,
+          latitude: latitude,
+          longitude: longitude,
+        );
+
+        if (!updatedLocation) return false;
+
+        final updatedPickup = await _locationService.updatePickupLocation(
+          locationId: pickUpLocationID,
+          address: address,
+        );
+
+        if (!updatedPickup) return false;
+      } else {
+        /// Si no existe, crea Location y PickupLocation
+        final locationID = await _locationService.createLocation(
+          LocationModel(
+            latitude: latitude,
+            longitude: longitude,
+          ),
+        );
+
+        if (locationID == null) return false;
+
+        final pickupSuccess = await _locationService.createPickupLocation(
+          PickupLocationModel(
+            locationID: locationID,
+            address: address,
+          ),
+        );
+
+        if (!pickupSuccess) return false;
+
+        pickUpLocationID = locationID;
+      }
+
+      /// Actualiza el perfil del productor incluyendo descripción y pickUpLocationID
+      await conn.execute(
+        '''
+      UPDATE User
+      SET name = :name,
+          email = :email,
+          cellphone = :cellphone,
+          image = :image,
+          description = :description,
+          pickUpLocationID = :pickUpLocationID
+      WHERE ID = :id
+      ''',
+        {
+          'name': user.name,
+          'email': user.email,
+          'cellphone': user.cellphone,
+          'image': user.image,
+          'description': user.description,
+          'pickUpLocationID': pickUpLocationID,
+          'id': user.id,
+        },
+      );
+
+      return true;
+    } catch (e) {
+      print('Error en updateProducerProfileData: $e');
+      return false;
+    }
+  }
+
   /// Actualiza la contraseña de un usuario y envía confirmación por email
   Future<bool> updatePassword(
       int id, String newPassword, String email, String name) async {

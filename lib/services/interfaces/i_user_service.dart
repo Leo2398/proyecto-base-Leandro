@@ -26,6 +26,14 @@ abstract class IUserService {
   /// Actualiza el perfil editable del usuario (nombre, email, teléfono, imagen)
   Future<bool> updateUserProfile(UserModel user);
 
+  /// Actualiza el perfil del productor incluyendo ubicación/punto de entrega
+  Future<bool> updateProducerProfileData({
+    required UserModel user,
+    required double latitude,
+    required double longitude,
+    required String address,
+  });
+
   /// Obtiene todos los administradores del sistema (role = 2)
   Future<List<UserModel>> getAllAdmins();
 
