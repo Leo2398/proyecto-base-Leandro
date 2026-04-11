@@ -11,6 +11,7 @@ import 'services/product_service.dart';
 import 'controllers/request_controller.dart';
 import 'controllers/coin_movement_controller.dart';
 import 'services/coin_movement_service.dart';
+import 'controllers/order_controller.dart';
 void main() {
   runApp(const MyApp());
 }
@@ -33,6 +34,7 @@ class MyApp extends StatelessWidget {
             coinMovementService: CoinMovementService(),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => OrderController()),
       ],
       child: MaterialApp(
         title: 'Agro App',

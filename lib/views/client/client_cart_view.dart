@@ -2,9 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/cart_controller.dart';
+import '../../controllers/order_controller.dart';
 import '../../controllers/user_controller.dart';
-import '../../models/cart_item_model.dart';
 import '../../core/image_helper.dart';
+import '../../models/cart_item_model.dart';
+import '../../models/order_detail_model.dart';
+import '../../models/order_model.dart';
+import '../../services/user_service.dart';
+
 class ClientCartView extends StatelessWidget {
   const ClientCartView({super.key});
 
@@ -21,17 +26,12 @@ class ClientCartView extends StatelessWidget {
 
             return Column(
               children: [
-                // ── Top Bar ──────────────────────────────────────────────
                 _buildTopBar(context, cart),
-
-                // ── Contenido ────────────────────────────────────────────
                 Expanded(
                   child: hasItems
                       ? _buildCartList(context, cart)
                       : _buildEmptyState(context),
                 ),
-
-                // ── Footer con total y botón ──────────────────────────
                 if (hasItems)
                   _buildFooter(context, cart, balance, canAfford),
               ],
@@ -41,8 +41,6 @@ class ClientCartView extends StatelessWidget {
       ),
     );
   }
-
-  // ── Top Bar ────────────────────────────────────────────────────────────────
 
   Widget _buildTopBar(BuildContext context, CartController cart) {
     return Container(
@@ -82,11 +80,9 @@ class ClientCartView extends StatelessWidget {
               ],
             ),
           ),
-          // Empresa activa
           if (cart.currentProducerName != null)
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -121,8 +117,6 @@ class ClientCartView extends StatelessWidget {
     );
   }
 
-  // ── Lista de productos ─────────────────────────────────────────────────────
-
   Widget _buildCartList(BuildContext context, CartController cart) {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -135,14 +129,12 @@ class ClientCartView extends StatelessWidget {
     );
   }
 
-  // ── Footer ─────────────────────────────────────────────────────────────────
-
   Widget _buildFooter(
-    BuildContext context,
-    CartController cart,
-    double balance,
-    bool canAfford,
-  ) {
+      BuildContext context,
+      CartController cart,
+      double balance,
+      bool canAfford,
+      ) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
       decoration: BoxDecoration(
@@ -159,7 +151,6 @@ class ClientCartView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Total del pedido
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -191,10 +182,7 @@ class ClientCartView extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 6),
-
-          // Saldo disponible
           Align(
             alignment: Alignment.centerRight,
             child: Text(
@@ -208,15 +196,11 @@ class ClientCartView extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(height: 12),
-
-          // Aviso de saldo suficiente / insuficiente
           AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             width: double.infinity,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: canAfford
                   ? const Color(0xFFEAF4EA)
@@ -257,16 +241,11 @@ class ClientCartView extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 14),
-
-          // Botón confirmar
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: canAfford
-                  ? () => _confirmOrder(context, cart)
-                  : null,
+              onPressed: canAfford ? () => _confirmOrder(context, cart) : null,
               icon: const Icon(Icons.check_rounded, size: 20),
               label: const Text(
                 'Confirmar pedido',
@@ -294,29 +273,160 @@ class ClientCartView extends StatelessWidget {
   }
 
   void _confirmOrder(BuildContext context, CartController cart) {
-    // TODO: implementar flujo de pedido real
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: const Text('Confirmar pedido'),
         content: Text(
           '¿Confirmas tu pedido de ${cart.itemCount} producto(s) por ${cart.total.toStringAsFixed(0)} monedas?',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.maybeOf(context);
+              final userCtrl = context.read<UserController>();
+              final orderCtrl = context.read<OrderController>();
+
+              final client = userCtrl.currentUser;
+              final producerID = cart.currentProducerID;
+
+              if (client == null || client.id == null || client.id! <= 0) {
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+                messenger?.showSnackBar(
+                  const SnackBar(
+                    content: Text('No se encontró un cliente válido.'),
+                    backgroundColor: Color(0xFFD96C2F),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              if (producerID == null || producerID <= 0) {
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+                messenger?.showSnackBar(
+                  const SnackBar(
+                    content: Text('No se encontró un productor válido.'),
+                    backgroundColor: Color(0xFFD96C2F),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              if (cart.items.isEmpty) {
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+                messenger?.showSnackBar(
+                  const SnackBar(
+                    content: Text('El carrito está vacío.'),
+                    backgroundColor: Color(0xFFD96C2F),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              if (dialogContext.mounted) {
+                Navigator.pop(dialogContext);
+              }
+
+              final producer = await UserService().getUserById(producerID);
+
+              if (!context.mounted) return;
+
+              if (producer == null ||
+                  producer.pickUpLocationID == null ||
+                  producer.pickUpLocationID! <= 0) {
+                messenger?.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'El productor no tiene una ubicación de entrega válida.',
+                    ),
+                    backgroundColor: Color(0xFFD96C2F),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              final details = cart.items
+                  .map(
+                    (item) => OrderDetailModel(
+                  orderID: 0,
+                  productID: item.productId,
+                  quantity: item.quantity,
+                  unitPrice: item.precio,
+                ),
+              )
+                  .toList();
+
+              final order = OrderModel(
+                amount: cart.total,
+                state: 0,
+                pickupLocationID: producer.pickUpLocationID!,
+                clientID: client.id!,
+                producerID: producerID,
+              );
+
+              final createdOrderId = await orderCtrl.createOrder(order, details);
+
+              if (!context.mounted) return;
+
+              if (createdOrderId == null || createdOrderId <= 0) {
+                messenger?.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      orderCtrl.errorMessage ?? 'No se pudo registrar el pedido.',
+                    ),
+                    backgroundColor: const Color(0xFFD96C2F),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              final balanceUpdated = await userCtrl.updateBalance(-cart.total);
+
+              if (!context.mounted) return;
+
+              if (!balanceUpdated) {
+                messenger?.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      userCtrl.errorMessage ??
+                          'El pedido se registró, pero no se pudo descontar el saldo.',
+                    ),
+                    backgroundColor: const Color(0xFFD96C2F),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              await userCtrl.reloadCurrentUser();
+
+              if (!context.mounted) return;
+
               cart.clearCart();
-              Navigator.pop(context); // cierra dialog
-              Navigator.pop(context); // vuelve al dashboard
-              ScaffoldMessenger.of(context).showSnackBar(
+              Navigator.pop(context);
+
+              messenger?.showSnackBar(
                 const SnackBar(
-                  content: Text('¡Pedido confirmado!'),
+                  content: Text('¡Pedido confirmado correctamente!'),
                   backgroundColor: Color(0xFF5A8A5A),
                   behavior: SnackBarBehavior.floating,
                 ),
@@ -326,7 +436,8 @@ class ClientCartView extends StatelessWidget {
               backgroundColor: const Color(0xFF5A8A5A),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Confirmar'),
           ),
@@ -334,8 +445,6 @@ class ClientCartView extends StatelessWidget {
       ),
     );
   }
-
-  // ── Empty state ────────────────────────────────────────────────────────────
 
   Widget _buildEmptyState(BuildContext context) {
     return Center(
@@ -383,14 +492,19 @@ class ClientCartView extends StatelessWidget {
                 backgroundColor: const Color(0xFF5A8A5A),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 28, vertical: 14),
+                  horizontal: 28,
+                  vertical: 14,
+                ),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(16),
+                ),
               ),
               child: const Text(
                 'Ver productores',
-                style:
-                    TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -399,8 +513,6 @@ class ClientCartView extends StatelessWidget {
     );
   }
 }
-
-// ── CartItemCard ───────────────────────────────────────────────────────────────
 
 class _CartItemCard extends StatelessWidget {
   final CartItem item;
@@ -427,22 +539,18 @@ class _CartItemCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            // Imagen
             AppImage(
-  src: item.picture,
-  width: 72,
-  height: 72,
-  borderRadius: 16,
-  placeholder: const Icon(
-    Icons.eco_outlined,
-    color: Color(0xFF5A8A5A),
-    size: 30,
-  ),
-),
-
+              src: item.picture,
+              width: 72,
+              height: 72,
+              borderRadius: 16,
+              placeholder: const Icon(
+                Icons.eco_outlined,
+                color: Color(0xFF5A8A5A),
+                size: 30,
+              ),
+            ),
             const SizedBox(width: 12),
-
-            // Nombre + precio unitario
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -479,17 +587,13 @@ class _CartItemCard extends StatelessWidget {
                 ],
               ),
             ),
-
             const SizedBox(width: 12),
-
-            // Controles de cantidad + subtotal
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // Subtotal
-                Row(
+                const Row(
                   children: [
-                    const Text(
+                    Text(
                       'Subtotal',
                       style: TextStyle(
                         fontSize: 11,
@@ -507,8 +611,9 @@ class _CartItemCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 2),
                     Text(
-                      item.subtotal
-                          .toStringAsFixed(item.subtotal % 1 == 0 ? 0 : 1),
+                      item.subtotal.toStringAsFixed(
+                        item.subtotal % 1 == 0 ? 0 : 1,
+                      ),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -517,10 +622,7 @@ class _CartItemCard extends StatelessWidget {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 8),
-
-                // Controles - cantidad +
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFFF5F0E8),
@@ -529,7 +631,6 @@ class _CartItemCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Botón -
                       GestureDetector(
                         onTap: () => cart.decrement(item.productId),
                         child: Container(
@@ -552,8 +653,6 @@ class _CartItemCard extends StatelessWidget {
                           ),
                         ),
                       ),
-
-                      // Cantidad
                       SizedBox(
                         width: 36,
                         child: Text(
@@ -566,8 +665,6 @@ class _CartItemCard extends StatelessWidget {
                           ),
                         ),
                       ),
-
-                      // Botón +
                       GestureDetector(
                         onTap: () => cart.increment(item.productId),
                         child: Container(
@@ -578,8 +675,7 @@ class _CartItemCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(10),
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF5A8A5A)
-                                    .withOpacity(0.25),
+                                color: const Color(0xFF5A8A5A).withOpacity(0.25),
                                 blurRadius: 4,
                               ),
                             ],
