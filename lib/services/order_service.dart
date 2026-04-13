@@ -6,6 +6,18 @@ import 'interfaces/i_order_service.dart';
 class OrderService implements IOrderService {
   final DBConnection _db = DBConnection.instance;
 
+  /// Estados usados en APP-44:
+  /// 0 = Pendiente
+  /// 1 = En preparación
+  /// 2 = Enviado
+  /// 3 = Completado
+  /// 4 = Cancelado
+  static const int statePending = 0;
+  static const int statePreparing = 1;
+  static const int stateShipped = 2;
+  static const int stateCompleted = 3;
+  static const int stateCancelled = 4;
+
   @override
   Future<int?> createOrder(
       OrderModel order,
@@ -13,6 +25,10 @@ class OrderService implements IOrderService {
       ) async {
     try {
       if (details.isEmpty) return null;
+
+      if (!_isValidOrderState(order.state)) {
+        return null;
+      }
 
       final conn = await _db.getConnection();
 
@@ -135,10 +151,15 @@ class OrderService implements IOrderService {
 
       final result = await conn.execute(
         '''
-        SELECT *
-        FROM Orders
-        WHERE ClientID = :clientID
-        ORDER BY registerDate DESC, UniqueID DESC
+        SELECT
+          o.*,
+          pl.address AS pickupLocationAddress,
+          NULL AS notes
+        FROM Orders o
+        LEFT JOIN PickupLocation pl
+          ON pl.LocationID = o.pickupLocationID
+        WHERE o.ClientID = :clientID
+        ORDER BY o.registerDate DESC, o.UniqueID DESC
         ''',
         {
           'clientID': clientID,
@@ -161,10 +182,15 @@ class OrderService implements IOrderService {
 
       final result = await conn.execute(
         '''
-        SELECT *
-        FROM Orders
-        WHERE ProducerID = :producerID
-        ORDER BY registerDate DESC, UniqueID DESC
+        SELECT
+          o.*,
+          pl.address AS pickupLocationAddress,
+          NULL AS notes
+        FROM Orders o
+        LEFT JOIN PickupLocation pl
+          ON pl.LocationID = o.pickupLocationID
+        WHERE o.ProducerID = :producerID
+        ORDER BY o.registerDate DESC, o.UniqueID DESC
         ''',
         {
           'producerID': producerID,
@@ -208,24 +234,104 @@ class OrderService implements IOrderService {
   @override
   Future<bool> updateOrderState(int orderID, int state) async {
     try {
+      if (orderID <= 0) return false;
+      if (!_isValidOrderState(state)) return false;
+
       final conn = await _db.getConnection();
 
-      final result = await conn.execute(
-        '''
-        UPDATE Orders
-        SET state = :state
-        WHERE UniqueID = :orderID
-        ''',
-        {
-          'state': state,
-          'orderID': orderID,
-        },
-      );
+      await conn.execute('START TRANSACTION');
 
-      return result.affectedRows.toInt() > 0;
+      try {
+        final currentStateResult = await conn.execute(
+          '''
+          SELECT state
+          FROM Orders
+          WHERE UniqueID = :orderID
+          LIMIT 1
+          ''',
+          {
+            'orderID': orderID,
+          },
+        );
+
+        if (currentStateResult.rows.isEmpty) {
+          await conn.execute('ROLLBACK');
+          return false;
+        }
+
+        final currentState =
+            int.tryParse(
+              currentStateResult.rows.first.assoc()['state'].toString(),
+            ) ??
+                -1;
+
+        if (!_isValidOrderState(currentState)) {
+          await conn.execute('ROLLBACK');
+          return false;
+        }
+
+        if (!_isTransitionAllowed(currentState, state)) {
+          await conn.execute('ROLLBACK');
+          print(
+            'Transición inválida en updateOrderState: '
+                '$currentState -> $state para OrderID=$orderID',
+          );
+          return false;
+        }
+
+        final result = await conn.execute(
+          '''
+          UPDATE Orders
+          SET state = :state
+          WHERE UniqueID = :orderID
+          ''',
+          {
+            'state': state,
+            'orderID': orderID,
+          },
+        );
+
+        if (result.affectedRows.toInt() <= 0) {
+          await conn.execute('ROLLBACK');
+          return false;
+        }
+
+        await conn.execute('COMMIT');
+        return true;
+      } catch (e) {
+        await conn.execute('ROLLBACK');
+        print('Error en updateOrderState (transaction): $e');
+        return false;
+      }
     } catch (e) {
       print('Error en updateOrderState: $e');
       return false;
+    }
+  }
+
+  bool _isValidOrderState(int state) {
+    return state >= statePending && state <= stateCancelled;
+  }
+
+  bool _isTransitionAllowed(int currentState, int nextState) {
+    if (currentState == nextState) return true;
+
+    switch (currentState) {
+      case statePending:
+        return nextState == statePreparing || nextState == stateCancelled;
+
+      case statePreparing:
+        return nextState == stateShipped || nextState == stateCancelled;
+
+      case stateShipped:
+        return nextState == stateCompleted || nextState == stateCancelled;
+
+      case stateCompleted:
+      case stateCancelled:
+        return false;
+
+      default:
+        return false;
     }
   }
 }

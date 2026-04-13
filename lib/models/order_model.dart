@@ -7,6 +7,10 @@ class OrderModel {
   final int clientID;
   final int producerID;
 
+  // APP-45
+  final String? pickupLocationAddress;
+  final String? notes;
+
   OrderModel({
     this.id,
     required this.amount,
@@ -15,6 +19,8 @@ class OrderModel {
     required this.pickupLocationID,
     required this.clientID,
     required this.producerID,
+    this.pickupLocationAddress,
+    this.notes,
   });
 
   OrderModel copyWith({
@@ -25,6 +31,8 @@ class OrderModel {
     int? pickupLocationID,
     int? clientID,
     int? producerID,
+    String? pickupLocationAddress,
+    String? notes,
   }) {
     return OrderModel(
       id: id ?? this.id,
@@ -34,6 +42,9 @@ class OrderModel {
       pickupLocationID: pickupLocationID ?? this.pickupLocationID,
       clientID: clientID ?? this.clientID,
       producerID: producerID ?? this.producerID,
+      pickupLocationAddress:
+      pickupLocationAddress ?? this.pickupLocationAddress,
+      notes: notes ?? this.notes,
     );
   }
 
@@ -46,6 +57,24 @@ class OrderModel {
       pickupLocationID: _toInt(map['pickupLocationID']),
       clientID: _toInt(map['ClientID'] ?? map['clientID']),
       producerID: _toInt(map['ProducerID'] ?? map['producerID']),
+
+      // APP-45
+      pickupLocationAddress: _toNullableString(
+        map['pickupLocationAddress'] ??
+            map['pickup_location_address'] ??
+            map['deliveryAddress'] ??
+            map['delivery_address'] ??
+            map['address'],
+      ),
+      notes: _toNullableString(
+        map['notes'] ??
+            map['orderNotes'] ??
+            map['order_notes'] ??
+            map['restaurantNotes'] ??
+            map['restaurant_notes'] ??
+            map['clientNotes'] ??
+            map['client_notes'],
+      ),
     );
   }
 
@@ -58,6 +87,10 @@ class OrderModel {
       'pickupLocationID': pickupLocationID,
       'ClientID': clientID,
       'ProducerID': producerID,
+
+      // APP-45
+      'pickupLocationAddress': pickupLocationAddress,
+      'notes': notes,
     };
   }
 
@@ -78,5 +111,12 @@ class OrderModel {
     if (value == null) return null;
     if (value is DateTime) return value;
     return DateTime.tryParse(value.toString());
+  }
+
+  static String? _toNullableString(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+    return text;
   }
 }

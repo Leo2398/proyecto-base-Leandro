@@ -11,6 +11,18 @@ class OrderController extends ChangeNotifier {
   OrderController({IOrderService? orderService})
       : _orderService = orderService ?? OrderService();
 
+  /// Estados usados en APP-44:
+  /// 0 = Pendiente
+  /// 1 = En preparación
+  /// 2 = Enviado
+  /// 3 = Completado
+  /// 4 = Cancelado
+  static const int statePending = 0;
+  static const int statePreparing = 1;
+  static const int stateShipped = 2;
+  static const int stateCompleted = 3;
+  static const int stateCancelled = 4;
+
   List<OrderModel> _clientOrders = [];
   List<OrderModel> _producerOrders = [];
   List<OrderDetailModel> _orderDetails = [];
@@ -56,11 +68,19 @@ class OrderController extends ChangeNotifier {
 
   int get producerTotalOrders => _producerSalesStats.totalOrders;
   int get producerPendingOrders => _producerSalesStats.pendingOrders;
+
+  /// Se mantiene este getter por compatibilidad con vistas ya hechas.
+  /// Ahora representa pedidos "En preparación".
   int get producerAcceptedOrders => _producerSalesStats.acceptedOrders;
+
+  int get producerPreparingOrders => _producerSalesStats.acceptedOrders;
+  int get producerShippedOrders => _producerSalesStats.shippedOrders;
   int get producerCompletedOrders => _producerSalesStats.completedOrders;
   int get producerCancelledOrders => _producerSalesStats.cancelledOrders;
 
   double get producerManagedAmount => _producerSalesStats.managedAmount;
+
+  /// Ingreso real ya completado.
   double get producerDeliveredRevenue => _producerSalesStats.deliveredRevenue;
   double get producerAverageTicket => _producerSalesStats.averageTicket;
 
@@ -205,25 +225,31 @@ class OrderController extends ChangeNotifier {
 
       _producerOrders = await _orderService.getOrdersByProducer(producerID);
 
-      // Recalcula el resumen básico local si ya había estadísticas cargadas.
       if (_lastStatsProducerId == producerID) {
         _producerSalesStats = _producerSalesStats.copyWith(
           totalOrders: _producerOrders.length,
-          pendingOrders:
-          _producerOrders.where((order) => order.state == 0).length,
-          acceptedOrders:
-          _producerOrders.where((order) => order.state == 1).length,
-          completedOrders:
-          _producerOrders.where((order) => order.state == 2).length,
-          cancelledOrders:
-          _producerOrders.where((order) => order.state == 3).length,
+          pendingOrders: _producerOrders
+              .where((order) => order.state == statePending)
+              .length,
+          acceptedOrders: _producerOrders
+              .where((order) => order.state == statePreparing)
+              .length,
+          shippedOrders: _producerOrders
+              .where((order) => order.state == stateShipped)
+              .length,
+          completedOrders: _producerOrders
+              .where((order) => order.state == stateCompleted)
+              .length,
+          cancelledOrders: _producerOrders
+              .where((order) => order.state == stateCancelled)
+              .length,
           managedAmount: _producerOrders
-              .where((order) => order.state != 3)
+              .where((order) => order.state != stateCancelled)
               .fold<double>(0.0, (sum, order) => sum + order.amount),
           deliveredRevenue: _producerOrders
-              .where((order) => order.state == 2)
+              .where((order) => order.state == stateCompleted)
               .fold<double>(0.0, (sum, order) => sum + order.amount),
-          averageTicket: _calculateAverageDeliveredTicket(_producerOrders),
+          averageTicket: _calculateAverageCompletedTicket(_producerOrders),
         );
       }
     } catch (e) {
@@ -270,8 +296,17 @@ class OrderController extends ChangeNotifier {
         return false;
       }
 
-      if (state < 0) {
+      if (!_isValidOrderState(state)) {
         _errorMessage = 'Estado de pedido inválido.';
+        return false;
+      }
+
+      final currentOrder = _findKnownOrderById(orderID);
+
+      if (currentOrder != null &&
+          !_isTransitionAllowed(currentOrder.state, state)) {
+        _errorMessage =
+        'No se puede cambiar de ${_getStateText(currentOrder.state)} a ${_getStateText(state)}.';
         return false;
       }
 
@@ -284,17 +319,18 @@ class OrderController extends ChangeNotifier {
 
       _clientOrders = _clientOrders
           .map(
-            (order) => order.id == orderID ? order.copyWith(state: state) : order,
+            (order) =>
+        order.id == orderID ? order.copyWith(state: state) : order,
       )
           .toList();
 
       _producerOrders = _producerOrders
           .map(
-            (order) => order.id == orderID ? order.copyWith(state: state) : order,
+            (order) =>
+        order.id == orderID ? order.copyWith(state: state) : order,
       )
           .toList();
 
-      // Si ya habíamos cargado estadísticas, las refrescamos automáticamente.
       if (_lastStatsProducerId != null) {
         await _recalculateProducerSalesStats(
           topLimit: _lastTopProductsLimit,
@@ -302,7 +338,8 @@ class OrderController extends ChangeNotifier {
         );
       }
 
-      _successMessage = 'Estado del pedido actualizado correctamente.';
+      _successMessage =
+      'Estado del pedido actualizado a ${_getStateText(state)}.';
       return true;
     } catch (e) {
       _errorMessage = 'Error actualizando estado del pedido: $e';
@@ -366,33 +403,47 @@ class OrderController extends ChangeNotifier {
     bool notifyAtEnd = true,
   }) async {
     final totalOrders = _producerOrders.length;
-    final pendingOrders =
-        _producerOrders.where((order) => order.state == 0).length;
-    final acceptedOrders =
-        _producerOrders.where((order) => order.state == 1).length;
-    final completedOrders =
-        _producerOrders.where((order) => order.state == 2).length;
-    final cancelledOrders =
-        _producerOrders.where((order) => order.state == 3).length;
+
+    final pendingOrders = _producerOrders
+        .where((order) => order.state == statePending)
+        .length;
+
+    final preparingOrders = _producerOrders
+        .where((order) => order.state == statePreparing)
+        .length;
+
+    final shippedOrders = _producerOrders
+        .where((order) => order.state == stateShipped)
+        .length;
+
+    final completedOrders = _producerOrders
+        .where((order) => order.state == stateCompleted)
+        .length;
+
+    final cancelledOrders = _producerOrders
+        .where((order) => order.state == stateCancelled)
+        .length;
 
     final managedAmount = _producerOrders
-        .where((order) => order.state != 3)
+        .where((order) => order.state != stateCancelled)
         .fold<double>(0.0, (sum, order) => sum + order.amount);
 
-    final deliveredOrders = _producerOrders
-        .where((order) => order.state == 2 && (order.id ?? 0) > 0)
+    final completedOrderList = _producerOrders
+        .where(
+          (order) => order.state == stateCompleted && (order.id ?? 0) > 0,
+    )
         .toList();
 
-    final deliveredRevenue = deliveredOrders.fold<double>(
+    final deliveredRevenue = completedOrderList.fold<double>(
       0.0,
           (sum, order) => sum + order.amount,
     );
 
-    final averageTicket = _calculateAverageDeliveredTicket(_producerOrders);
+    final averageTicket = _calculateAverageCompletedTicket(_producerOrders);
 
     final Map<int, _TopSellingAccumulator> accumulatorByProduct = {};
 
-    for (final order in deliveredOrders) {
+    for (final order in completedOrderList) {
       if (order.id == null || order.id! <= 0) continue;
 
       final details = await _orderService.getOrderDetails(order.id!);
@@ -434,7 +485,8 @@ class OrderController extends ChangeNotifier {
     _producerSalesStats = ProducerSalesStats(
       totalOrders: totalOrders,
       pendingOrders: pendingOrders,
-      acceptedOrders: acceptedOrders,
+      acceptedOrders: preparingOrders,
+      shippedOrders: shippedOrders,
       completedOrders: completedOrders,
       cancelledOrders: cancelledOrders,
       managedAmount: managedAmount,
@@ -448,17 +500,73 @@ class OrderController extends ChangeNotifier {
     }
   }
 
-  double _calculateAverageDeliveredTicket(List<OrderModel> orders) {
-    final delivered = orders.where((order) => order.state == 2).toList();
+  double _calculateAverageCompletedTicket(List<OrderModel> orders) {
+    final completed = orders
+        .where((order) => order.state == stateCompleted)
+        .toList();
 
-    if (delivered.isEmpty) return 0.0;
+    if (completed.isEmpty) return 0.0;
 
-    final total = delivered.fold<double>(
+    final total = completed.fold<double>(
       0.0,
           (sum, order) => sum + order.amount,
     );
 
-    return total / delivered.length;
+    return total / completed.length;
+  }
+
+  bool _isValidOrderState(int state) {
+    return state >= statePending && state <= stateCancelled;
+  }
+
+  OrderModel? _findKnownOrderById(int orderID) {
+    for (final order in _producerOrders) {
+      if (order.id == orderID) return order;
+    }
+
+    for (final order in _clientOrders) {
+      if (order.id == orderID) return order;
+    }
+
+    return null;
+  }
+
+  bool _isTransitionAllowed(int currentState, int nextState) {
+    if (currentState == nextState) return true;
+    return _getAllowedNextStates(currentState).contains(nextState);
+  }
+
+  List<int> _getAllowedNextStates(int currentState) {
+    switch (currentState) {
+      case statePending:
+        return [statePreparing, stateCancelled];
+      case statePreparing:
+        return [stateShipped, stateCancelled];
+      case stateShipped:
+        return [stateCompleted, stateCancelled];
+      case stateCompleted:
+      case stateCancelled:
+        return [];
+      default:
+        return [];
+    }
+  }
+
+  String _getStateText(int state) {
+    switch (state) {
+      case statePending:
+        return 'Pendiente';
+      case statePreparing:
+        return 'En preparación';
+      case stateShipped:
+        return 'Enviado';
+      case stateCompleted:
+        return 'Completado';
+      case stateCancelled:
+        return 'Cancelado';
+      default:
+        return 'Desconocido';
+    }
   }
 
   void _clearProducerSalesStatsInternal() {
@@ -471,7 +579,12 @@ class OrderController extends ChangeNotifier {
 class ProducerSalesStats {
   final int totalOrders;
   final int pendingOrders;
+
+  /// Se mantiene este nombre por compatibilidad con vistas ya creadas.
+  /// Ahora representa "En preparación".
   final int acceptedOrders;
+
+  final int shippedOrders;
   final int completedOrders;
   final int cancelledOrders;
 
@@ -485,6 +598,7 @@ class ProducerSalesStats {
     required this.totalOrders,
     required this.pendingOrders,
     required this.acceptedOrders,
+    required this.shippedOrders,
     required this.completedOrders,
     required this.cancelledOrders,
     required this.managedAmount,
@@ -497,6 +611,7 @@ class ProducerSalesStats {
       : totalOrders = 0,
         pendingOrders = 0,
         acceptedOrders = 0,
+        shippedOrders = 0,
         completedOrders = 0,
         cancelledOrders = 0,
         managedAmount = 0.0,
@@ -508,6 +623,7 @@ class ProducerSalesStats {
     int? totalOrders,
     int? pendingOrders,
     int? acceptedOrders,
+    int? shippedOrders,
     int? completedOrders,
     int? cancelledOrders,
     double? managedAmount,
@@ -519,6 +635,7 @@ class ProducerSalesStats {
       totalOrders: totalOrders ?? this.totalOrders,
       pendingOrders: pendingOrders ?? this.pendingOrders,
       acceptedOrders: acceptedOrders ?? this.acceptedOrders,
+      shippedOrders: shippedOrders ?? this.shippedOrders,
       completedOrders: completedOrders ?? this.completedOrders,
       cancelledOrders: cancelledOrders ?? this.cancelledOrders,
       managedAmount: managedAmount ?? this.managedAmount,

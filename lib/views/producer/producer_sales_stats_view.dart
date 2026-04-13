@@ -12,6 +12,7 @@ import 'producer_dashboard_view.dart';
 import 'producer_orders_view.dart';
 import 'producer_products_view.dart';
 import 'producer_profile_view.dart';
+import 'producer_sales_history_view.dart';
 
 class ProducerSalesStatsView extends StatefulWidget {
   const ProducerSalesStatsView({super.key});
@@ -230,6 +231,13 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
     );
   }
 
+  Future<void> _goToSalesHistory() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProducerSalesHistoryView()),
+    );
+  }
+
   Future<void> _onBottomNavigationTap(int index) async {
     switch (index) {
       case 0:
@@ -323,6 +331,11 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
               ),
             ],
           ),
+        ),
+        const SizedBox(width: 8),
+        _buildSmallIconButton(
+          icon: Icons.history_rounded,
+          onTap: _goToSalesHistory,
         ),
         const SizedBox(width: 8),
         _buildSmallIconButton(
@@ -507,6 +520,27 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _goToSalesHistory,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: BorderSide(color: Colors.white.withOpacity(0.32)),
+                backgroundColor: Colors.white.withOpacity(0.08),
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              icon: const Icon(Icons.history_rounded, size: 18),
+              label: const Text(
+                'Ir al historial de ventas',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
           ),
         ],
       ),
@@ -910,6 +944,24 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
             label: Text(
               _isRefreshing ? 'Actualizando...' : 'Actualizar estadísticas',
               style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _goToSalesHistory,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _primaryDark,
+              side: BorderSide(color: _border),
+              backgroundColor: _surfaceSoft,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+            icon: const Icon(Icons.history_rounded),
+            label: const Text(
+              'Ir al historial de ventas',
+              style: TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -1372,7 +1424,11 @@ class _SummaryCard extends StatelessWidget {
                       color: item.color.withOpacity(0.14),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(item.icon, color: item.color, size: compact ? 20 : 22),
+                    child: Icon(
+                      item.icon,
+                      color: item.color,
+                      size: compact ? 20 : 22,
+                    ),
                   ),
                   const Spacer(),
                   Container(
