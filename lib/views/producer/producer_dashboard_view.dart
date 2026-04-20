@@ -1,12 +1,16 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/coin_movement_controller.dart';
+import '../../controllers/notification_controller.dart';
 import '../../controllers/order_controller.dart';
 import '../../controllers/product_controller.dart';
 import '../../controllers/user_controller.dart';
+import '../../models/notification_model.dart';
 import '../../models/order_model.dart';
 import '../../models/product_model.dart';
 import '../auth/login_view.dart';
@@ -26,11 +30,11 @@ class ProducerDashboardView extends StatefulWidget {
 
 class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   static const Color _bgTop = Color(0xFFF7F2EA);
-  static const Color _bgBottom = Color(0xFFE9DDCE);
+  static const Color _bgBottom = Color(0xFFE8DAC9);
 
   static const Color _surface = Colors.white;
   static const Color _surfaceSoft = Color(0xFFFFFCF8);
-  static const Color _surfaceMuted = Color(0xFFF8F2E9);
+  static const Color _surfaceMuted = Color(0xFFF7EFE5);
 
   static const Color _primary = Color(0xFFC69A5B);
   static const Color _primaryDark = Color(0xFF8A6848);
@@ -39,6 +43,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   static const Color _orange = Color(0xFFD97A33);
   static const Color _red = Color(0xFFBC5F39);
   static const Color _blue = Color(0xFF5E7FA3);
+  static const Color _purple = Color(0xFF7A67A8);
 
   static const Color _textDark = Color(0xFF4B3427);
   static const Color _textSoft = Color(0xFF857261);
@@ -51,9 +56,42 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDashboardData();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initializeDashboard();
     });
+  }
+
+  Future<void> _initializeDashboard() async {
+    await _loadDashboardData();
+    await _setupNotifications();
+  }
+
+  Future<void> _setupNotifications() async {
+    final userController = context.read<UserController>();
+    final notificationController = context.read<NotificationController>();
+
+    final currentUser = userController.currentUser;
+    if (currentUser == null || currentUser.id == null || currentUser.id! <= 0) {
+      return;
+    }
+
+    notificationController.onNewNotification = (notification) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(notification.title),
+          backgroundColor: _primaryDark,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    };
+
+    await notificationController.startPolling(
+      userId: currentUser.id!,
+      interval: const Duration(seconds: 8),
+      loadImmediately: true,
+    );
   }
 
   Future<void> _loadDashboardData() async {
@@ -66,6 +104,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       final productController = context.read<ProductController>();
       final coinController = context.read<CoinMovementController>();
       final orderController = context.read<OrderController>();
+      final notificationController = context.read<NotificationController>();
 
       final currentUser = userController.currentUser;
       if (currentUser == null || currentUser.id == null || currentUser.id! <= 0) {
@@ -76,6 +115,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         productController.getProductsByProducer(currentUser.id!),
         coinController.loadCoinData(currentUser.id!),
         orderController.loadOrdersByProducer(currentUser.id!),
+        notificationController.refresh(userId: currentUser.id!),
       ]);
 
       if (!mounted) return;
@@ -144,13 +184,21 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     return _activeProducts(products) / products.length;
   }
 
-  int _pendingOrders(List<OrderModel> orders) => orders.where((o) => o.state == 0).length;
+  int _pendingOrders(List<OrderModel> orders) {
+    return orders.where((o) => o.state == 0).length;
+  }
 
-  int _acceptedOrders(List<OrderModel> orders) => orders.where((o) => o.state == 1).length;
+  int _acceptedOrders(List<OrderModel> orders) {
+    return orders.where((o) => o.state == 1).length;
+  }
 
-  int _deliveredOrders(List<OrderModel> orders) => orders.where((o) => o.state == 2).length;
+  int _deliveredOrders(List<OrderModel> orders) {
+    return orders.where((o) => o.state == 2).length;
+  }
 
-  int _cancelledOrders(List<OrderModel> orders) => orders.where((o) => o.state == 3).length;
+  int _cancelledOrders(List<OrderModel> orders) {
+    return orders.where((o) => o.state == 3).length;
+  }
 
   double _managedAmount(List<OrderModel> orders) {
     return orders.fold(0.0, (sum, order) => sum + order.amount);
@@ -208,7 +256,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   }
 
   String _formatHour(DateTime? date) {
-    if (date == null) return 'Sin sincronizar';
+    if (date == null) return '--:--';
     final hour = date.hour.toString().padLeft(2, '0');
     final minute = date.minute.toString().padLeft(2, '0');
     return '$hour:$minute';
@@ -306,6 +354,51 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     return _green;
   }
 
+  String _notificationTypeLabel(String type) {
+    switch (type.toLowerCase()) {
+      case 'order':
+        return 'Pedido';
+      case 'recharge':
+        return 'Recarga';
+      case 'stock':
+        return 'Stock';
+      case 'system':
+        return 'Sistema';
+      default:
+        return 'General';
+    }
+  }
+
+  IconData _notificationTypeIcon(String type) {
+    switch (type.toLowerCase()) {
+      case 'order':
+        return Icons.receipt_long_rounded;
+      case 'recharge':
+        return Icons.account_balance_wallet_rounded;
+      case 'stock':
+        return Icons.inventory_2_rounded;
+      case 'system':
+        return Icons.settings_suggest_rounded;
+      default:
+        return Icons.notifications_active_rounded;
+    }
+  }
+
+  Color _notificationTypeColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'order':
+        return _blue;
+      case 'recharge':
+        return _gold;
+      case 'stock':
+        return _orange;
+      case 'system':
+        return _purple;
+      default:
+        return _primary;
+    }
+  }
+
   EdgeInsets _pagePadding(double width) {
     if (width >= 1200) return const EdgeInsets.fromLTRB(28, 16, 28, 170);
     if (width >= 800) return const EdgeInsets.fromLTRB(20, 14, 20, 170);
@@ -320,8 +413,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   }
 
   int _quickActionsCrossAxisCount(double width) {
-    if (width >= 1200) return 5;
-    if (width >= 760) return 5;
+    if (width >= 1200) return 6;
+    if (width >= 760) return 3;
     return 2;
   }
 
@@ -366,7 +459,10 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Producto publicado correctamente')),
+        const SnackBar(
+          content: Text('Producto publicado correctamente'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -408,6 +504,181 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     await _loadDashboardData();
   }
 
+  Future<void> _showNotificationsSheet() async {
+    final notificationController = context.read<NotificationController>();
+    final userId = context.read<UserController>().currentUser?.id;
+
+    if (userId != null && userId > 0) {
+      await notificationController.refresh(userId: userId);
+    }
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return Consumer<NotificationController>(
+          builder: (context, notificationController, child) {
+            final notifications = notificationController.notifications;
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.76,
+              minChildSize: 0.45,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF8F2EA),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      Container(
+                        width: 52,
+                        height: 5,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD6C6B3),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Notificaciones',
+                                style: TextStyle(
+                                  color: _textDark,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if (notificationController.unreadCount > 0)
+                              TextButton.icon(
+                                onPressed: () async {
+                                  await notificationController.markAllAsRead(userId);
+                                },
+                                icon: const Icon(Icons.done_all_rounded, size: 18),
+                                label: const Text('Marcar todas'),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+                        child: Row(
+                          children: [
+                            _buildTinyStatusChip(
+                              '${notificationController.unreadCount} sin leer',
+                              _primary,
+                            ),
+                            const SizedBox(width: 8),
+                            _buildTinyStatusChip(
+                              '${notifications.length} en lista',
+                              _blue,
+                            ),
+                            const Spacer(),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () async {
+                                if (userId != null && userId > 0) {
+                                  await notificationController.refresh(userId: userId);
+                                }
+                              },
+                              child: Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: _border),
+                                ),
+                                child: const Icon(
+                                  Icons.refresh_rounded,
+                                  color: _primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: notificationController.isLoading
+                            ? const Center(
+                          child: CircularProgressIndicator(color: _primary),
+                        )
+                            : notifications.isEmpty
+                            ? ListView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(18, 10, 18, 30),
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: _border),
+                              ),
+                              child: const Column(
+                                children: [
+                                  Icon(
+                                    Icons.notifications_none_rounded,
+                                    size: 54,
+                                    color: _textSoft,
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'No hay notificaciones todavía',
+                                    style: TextStyle(
+                                      color: _textDark,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Cuando haya pedidos, cambios o eventos nuevos, aparecerán aquí.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: _textSoft,
+                                      fontSize: 12.8,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                            : ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
+                          itemCount: notifications.length,
+                          separatorBuilder: (_, __) =>
+                          const SizedBox(height: 10),
+                          itemBuilder: (_, index) {
+                            final item = notifications[index];
+                            return _buildNotificationTile(item);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _replenishProduct(ProductModel product) async {
     if (product.id == null) return;
 
@@ -423,19 +694,28 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Stock actualizado para ${product.name}')),
+        SnackBar(
+          content: Text('Stock actualizado para ${product.name}'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(productController.errorMessage ?? 'Error al actualizar stock'),
+          content: Text(
+            productController.errorMessage ?? 'Error al actualizar stock',
+          ),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
   }
 
   Future<void> _logout() async {
+    final notificationController = context.read<NotificationController>();
     final controller = context.read<UserController>();
+
+    notificationController.stopPolling();
     await controller.logout();
 
     if (!mounted) return;
@@ -470,12 +750,157 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     }
   }
 
+  Uint8List? _decodeImageBytes(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+
+    try {
+      final raw = value.trim();
+      final normalized = raw.contains(',')
+          ? raw.substring(raw.indexOf(',') + 1)
+          : raw;
+
+      return base64Decode(normalized);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isNetworkImage(String? value) {
+    if (value == null) return false;
+    final normalized = value.trim().toLowerCase();
+    return normalized.startsWith('http://') || normalized.startsWith('https://');
+  }
+
+  Widget _buildUserAvatar({
+    required String name,
+    required String? image,
+    double size = 58,
+    double radius = 20,
+    double fontSize = 22,
+  }) {
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'P';
+    final bytes = _decodeImageBytes(image);
+
+    if (_isNetworkImage(image)) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(radius),
+          boxShadow: [
+            BoxShadow(
+              color: _primary.withOpacity(0.18),
+              blurRadius: 14,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Image.network(
+            image!,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildInitialAvatar(
+              initial: initial,
+              size: size,
+              radius: radius,
+              fontSize: fontSize,
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (bytes != null) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(radius),
+          boxShadow: [
+            BoxShadow(
+              color: _primary.withOpacity(0.18),
+              blurRadius: 14,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildInitialAvatar(
+              initial: initial,
+              size: size,
+              radius: radius,
+              fontSize: fontSize,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return _buildInitialAvatar(
+      initial: initial,
+      size: size,
+      radius: radius,
+      fontSize: fontSize,
+    );
+  }
+
+  Widget _buildInitialAvatar({
+    required String initial,
+    required double size,
+    required double radius,
+    required double fontSize,
+  }) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        gradient: const LinearGradient(
+          colors: [_primary, Color(0xFFB9854A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: _primary.withOpacity(0.28),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: fontSize,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    final notificationController = context.read<NotificationController>();
+    notificationController.onNewNotification = null;
+    notificationController.stopPolling();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final userController = context.watch<UserController>();
     final productController = context.watch<ProductController>();
     final coinController = context.watch<CoinMovementController>();
     final orderController = context.watch<OrderController>();
+    final notificationController = context.watch<NotificationController>();
 
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 700;
@@ -483,26 +908,29 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
 
     final products = productController.products;
     final orders = orderController.producerOrders;
+    final notifications = notificationController.notifications;
 
     final recentProducts = _recentProducts(products).take(isMobile ? 4 : 6).toList();
     final recentOrders = _recentOrders(orders).take(isMobile ? 3 : 5).toList();
+    final recentNotifications =
+    notifications.take(isMobile ? 3 : 4).toList();
+
     final lowStockProducts = _lowStockProducts(products);
     final soldOutProducts = _soldOutProducts(products);
 
     final coinBalance = _dashboardCoinBalance(userController, coinController);
     final moneyReference = _dashboardMoneyReference(userController, coinController);
 
-    final isLoading =
-        productController.isLoading ||
-            coinController.isLoading ||
-            orderController.isLoading ||
-            _isRefreshing;
+    final isLoading = productController.isLoading ||
+        coinController.isLoading ||
+        orderController.isLoading ||
+        notificationController.isLoading ||
+        _isRefreshing;
 
-    final isInitialLoading =
-        isLoading &&
-            products.isEmpty &&
-            orders.isEmpty &&
-            _lastSyncedAt == null;
+    final isInitialLoading = isLoading &&
+        products.isEmpty &&
+        orders.isEmpty &&
+        _lastSyncedAt == null;
 
     return Scaffold(
       extendBody: true,
@@ -523,7 +951,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             Positioned(
               top: -80,
               left: -50,
-              child: _buildDecorBubble(180, _primary.withOpacity(0.11)),
+              child: _buildDecorBubble(180, _primary.withOpacity(0.10)),
             ),
             Positioned(
               top: 120,
@@ -563,6 +991,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                                 products: products,
                                 orders: orders,
                                 coinBalance: coinBalance,
+                                unreadCount: notificationController.unreadCount,
                                 isLoading: isLoading,
                                 isMobile: isMobile,
                               ),
@@ -576,6 +1005,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                                   orders: orders,
                                   coinBalance: coinBalance,
                                   moneyReference: moneyReference,
+                                  unreadCount: notificationController.unreadCount,
                                   isLoading: isLoading,
                                   isMobile: isMobile,
                                 ),
@@ -589,6 +1019,11 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                                 ),
                                 const SizedBox(height: 18),
                                 _buildQuickActionsSection(screenWidth),
+                                const SizedBox(height: 18),
+                                _buildNotificationsPreviewSection(
+                                  unreadCount: notificationController.unreadCount,
+                                  recentNotifications: recentNotifications,
+                                ),
                                 const SizedBox(height: 18),
                                 _buildOrdersOverviewSection(
                                   screenWidth: screenWidth,
@@ -665,45 +1100,24 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     required List<ProductModel> products,
     required List<OrderModel> orders,
     required double coinBalance,
+    required int unreadCount,
     required bool isLoading,
     required bool isMobile,
   }) {
     final user = userController.currentUser;
     final name = user?.name ?? 'Productor';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : 'P';
+    final image = user?.image;
     final stockColor = _stockHealthColor(products);
     final stockText = _stockHealthLabel(products);
 
     final left = Row(
       children: [
-        Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: const LinearGradient(
-              colors: [_primary, Color(0xFFB9854A)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: _primary.withOpacity(0.28),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Center(
-            child: Text(
-              initial,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
+        _buildUserAvatar(
+          name: name,
+          image: image,
+          size: 60,
+          radius: 20,
+          fontSize: 24,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -765,6 +1179,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
       children: [
         _buildCoinChip('${_coins(coinBalance)} mon.'),
         _buildOrderChip('${orders.length} pedidos'),
+        _buildNotificationButton(unreadCount),
         _buildHeaderIconButton(
           icon: Icons.refresh_rounded,
           color: _primary,
@@ -890,6 +1305,57 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
+  Widget _buildNotificationButton(int unreadCount) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: _showNotificationsSheet,
+      child: Container(
+        width: 46,
+        height: 46,
+        decoration: BoxDecoration(
+          color: _surface.withOpacity(0.96),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _border),
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Center(
+              child: Icon(
+                Icons.notifications_none_rounded,
+                color: _primaryDark,
+                size: 21,
+              ),
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  constraints: const BoxConstraints(minWidth: 18),
+                  decoration: BoxDecoration(
+                    color: _red,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: Text(
+                    unreadCount > 99 ? '99+' : unreadCount.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeaderIconButton({
     required IconData icon,
     required Color color,
@@ -926,11 +1392,36 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         color: _surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         onSelected: (value) {
-          if (value == 'logout') {
+          if (value == 'notifications') {
+            _showNotificationsSheet();
+          } else if (value == 'refresh') {
+            _loadDashboardData();
+          } else if (value == 'logout') {
             _logout();
           }
         },
         itemBuilder: (_) => const [
+          PopupMenuItem<String>(
+            value: 'notifications',
+            child: Row(
+              children: [
+                Icon(Icons.notifications_none_rounded, size: 18),
+                SizedBox(width: 10),
+                Text('Ver notificaciones'),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'refresh',
+            child: Row(
+              children: [
+                Icon(Icons.refresh_rounded, size: 18),
+                SizedBox(width: 10),
+                Text('Actualizar dashboard'),
+              ],
+            ),
+          ),
+          PopupMenuDivider(),
           PopupMenuItem<String>(
             value: 'logout',
             child: Row(
@@ -969,7 +1460,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
           ),
           SizedBox(height: 8),
           Text(
-            'Estamos trayendo productos, monedas y pedidos.',
+            'Estamos trayendo productos, monedas, pedidos y notificaciones.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: _textSoft,
@@ -988,10 +1479,12 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     required List<OrderModel> orders,
     required double coinBalance,
     required double moneyReference,
+    required int unreadCount,
     required bool isLoading,
     required bool isMobile,
   }) {
-    final userName = userController.currentUser?.name ?? 'Productor';
+    final user = userController.currentUser;
+    final userName = user?.name ?? 'Productor';
     final stockText = _stockHealthLabel(products);
     final stockColor = _stockHealthColor(products);
 
@@ -1020,30 +1513,68 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildHeroTag(icon: Icons.storefront_outlined, text: '${products.length} productos'),
-              _buildHeroTag(icon: Icons.receipt_long_rounded, text: '${orders.length} pedidos'),
-              _buildHeroTag(icon: Icons.auto_graph_rounded, text: stockText),
-              _buildHeroTag(icon: Icons.sync_rounded, text: isLoading ? 'Actualizando' : 'Sincronizado'),
+              _buildHeroTag(
+                icon: Icons.storefront_outlined,
+                text: '${products.length} productos',
+              ),
+              _buildHeroTag(
+                icon: Icons.receipt_long_rounded,
+                text: '${orders.length} pedidos',
+              ),
+              _buildHeroTag(
+                icon: Icons.auto_graph_rounded,
+                text: stockText,
+              ),
+              _buildHeroTag(
+                icon: Icons.notifications_active_outlined,
+                text: unreadCount > 0
+                    ? '$unreadCount nuevas'
+                    : 'Sin alertas nuevas',
+              ),
+              _buildHeroTag(
+                icon: Icons.sync_rounded,
+                text: isLoading ? 'Actualizando' : 'Sincronizado',
+              ),
             ],
           ),
           const SizedBox(height: 18),
-          const Text(
-            'Tu tienda lista para vender y gestionar pedidos',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              height: 1.04,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Hola, $userName. Ahora este dashboard también queda conectado con la ventana de pedidos para revisar estados, actividad y operación desde el inicio.',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.78),
-              fontSize: 12.8,
-              height: 1.45,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildUserAvatar(
+                name: userName,
+                image: user?.image,
+                size: 64,
+                radius: 22,
+                fontSize: 24,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tu tienda lista para vender y gestionar pedidos',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                        height: 1.04,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Hola, $userName. Desde aquí puedes revisar productos, pedidos, monedas y ahora también notificaciones en tiempo real.',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.78),
+                        fontSize: 12.8,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           isMobile
@@ -1086,10 +1617,22 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _buildHeroMiniCard(title: 'Activos', value: _activeProducts(products).toString()),
-              _buildHeroMiniCard(title: 'Pedidos', value: orders.length.toString()),
-              _buildHeroMiniCard(title: 'Entregados', value: _deliveredOrders(orders).toString()),
-              _buildHeroMiniCard(title: 'Referencia', value: _money(moneyReference)),
+              _buildHeroMiniCard(
+                title: 'Activos',
+                value: _activeProducts(products).toString(),
+              ),
+              _buildHeroMiniCard(
+                title: 'Pedidos',
+                value: orders.length.toString(),
+              ),
+              _buildHeroMiniCard(
+                title: 'Entregados',
+                value: _deliveredOrders(orders).toString(),
+              ),
+              _buildHeroMiniCard(
+                title: 'Referencia',
+                value: _money(moneyReference),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1107,7 +1650,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Estado general: $stockText · ${_pendingOrders(orders)} pedidos pendientes',
+                    'Estado general: $stockText · ${_pendingOrders(orders)} pedidos pendientes · $unreadCount notificaciones sin leer',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.96),
                       fontSize: 12.5,
@@ -1130,7 +1673,9 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                     backgroundColor: _primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   icon: const Icon(Icons.receipt_long_rounded, size: 18),
                   label: const Text('Ver pedidos'),
@@ -1140,15 +1685,17 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _goToProducts,
+                  onPressed: _showNotificationsSheet,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: _textDark,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                  icon: const Icon(Icons.storefront_rounded, size: 18),
-                  label: const Text('Ver productos'),
+                  icon: const Icon(Icons.notifications_outlined, size: 18),
+                  label: const Text('Ver notificaciones'),
                 ),
               ),
             ],
@@ -1162,7 +1709,9 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                     backgroundColor: _primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   icon: const Icon(Icons.receipt_long_rounded, size: 18),
                   label: const Text('Ver pedidos'),
@@ -1171,15 +1720,17 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _goToProducts,
+                  onPressed: _showNotificationsSheet,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: _textDark,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
-                  icon: const Icon(Icons.storefront_rounded, size: 18),
-                  label: const Text('Ver productos'),
+                  icon: const Icon(Icons.notifications_outlined, size: 18),
+                  label: const Text('Notificaciones'),
                 ),
               ),
               const SizedBox(width: 10),
@@ -1190,7 +1741,9 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                     backgroundColor: Colors.white.withOpacity(0.18),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   icon: const Icon(Icons.add_box_outlined, size: 18),
                   label: const Text('Publicar producto'),
@@ -1337,7 +1890,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         ),
         const SizedBox(height: 4),
         const Text(
-          'Una franja más visual para que el saldo, el inventario y la operación diaria se noten más.',
+          'Saldo, inventario y resumen de la operación diaria en una sola franja.',
           style: TextStyle(color: _textSoft, fontSize: 12.5, height: 1.4),
         ),
         const SizedBox(height: 12),
@@ -1624,6 +2177,13 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         color: _green,
         onTap: _goToProfile,
       ),
+      _ActionItem(
+        title: 'Avisos',
+        subtitle: 'Ver notificaciones',
+        icon: Icons.notifications_outlined,
+        color: _purple,
+        onTap: _showNotificationsSheet,
+      ),
     ];
 
     return Column(
@@ -1647,7 +2207,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             crossAxisCount: _quickActionsCrossAxisCount(screenWidth),
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: screenWidth < 500 ? 1.1 : 1.35,
+            childAspectRatio: screenWidth < 500 ? 1.10 : 1.35,
           ),
           itemBuilder: (_, index) => _buildActionCard(items[index]),
         ),
@@ -1705,17 +2265,232 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
+  Widget _buildNotificationsPreviewSection({
+    required int unreadCount,
+    required List<NotificationModel> recentNotifications,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface.withOpacity(0.98),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Notificaciones',
+                      style: TextStyle(
+                        color: _textDark,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Avisos nuevos del sistema para revisarlos rápido.',
+                      style: TextStyle(
+                        color: _textSoft,
+                        fontSize: 12.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _showNotificationsSheet,
+                icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                label: const Text('Abrir'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildTinyStatusChip('$unreadCount sin leer', unreadCount > 0 ? _red : _green),
+              const SizedBox(width: 8),
+              _buildTinyStatusChip('Tiempo real activo', _blue),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (recentNotifications.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: _surfaceSoft,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: _divider),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.notifications_none_rounded, color: _textSoft),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Todavía no hay notificaciones para mostrar.',
+                      style: TextStyle(
+                        color: _textSoft,
+                        fontSize: 12.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...recentNotifications.map(_buildNotificationPreviewCard),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationPreviewCard(NotificationModel item) {
+    final color = _notificationTypeColor(item.type);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: item.isRead ? _surfaceSoft : color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: item.isRead ? _divider : color.withOpacity(0.24),
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () async {
+          if (!item.isRead && item.id != null) {
+            await context.read<NotificationController>().markAsRead(item.id!);
+          }
+          if (!mounted) return;
+          await _showNotificationsSheet();
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(_notificationTypeIcon(item.type), color: color, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: _textDark,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (!item.isRead)
+                          Container(
+                            width: 9,
+                            height: 9,
+                            decoration: const BoxDecoration(
+                              color: _red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.message,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _textSoft,
+                        fontSize: 12.2,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildSoftInfoChip(
+                          icon: _notificationTypeIcon(item.type),
+                          text: _notificationTypeLabel(item.type),
+                        ),
+                        _buildSoftInfoChip(
+                          icon: Icons.schedule_rounded,
+                          text: _formatDateTime(item.createdAt),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildOrdersOverviewSection({
     required double screenWidth,
     required List<OrderModel> orders,
     required List<OrderModel> recentOrders,
   }) {
     final metrics = [
-      _MetricItem(label: 'Pedidos', value: orders.length.toString(), icon: Icons.receipt_long_rounded, color: _blue),
-      _MetricItem(label: 'Pendientes', value: _pendingOrders(orders).toString(), icon: Icons.schedule_rounded, color: _orange),
-      _MetricItem(label: 'Aceptados', value: _acceptedOrders(orders).toString(), icon: Icons.inventory_2_rounded, color: _blue),
-      _MetricItem(label: 'Entregados', value: _deliveredOrders(orders).toString(), icon: Icons.check_circle_rounded, color: _green),
-      _MetricItem(label: 'Gestionado', value: _bs(_managedAmount(orders)), icon: Icons.payments_rounded, color: _gold),
+      _MetricItem(
+        label: 'Pedidos',
+        value: orders.length.toString(),
+        icon: Icons.receipt_long_rounded,
+        color: _blue,
+      ),
+      _MetricItem(
+        label: 'Pendientes',
+        value: _pendingOrders(orders).toString(),
+        icon: Icons.schedule_rounded,
+        color: _orange,
+      ),
+      _MetricItem(
+        label: 'Aceptados',
+        value: _acceptedOrders(orders).toString(),
+        icon: Icons.inventory_2_rounded,
+        color: _blue,
+      ),
+      _MetricItem(
+        label: 'Entregados',
+        value: _deliveredOrders(orders).toString(),
+        icon: Icons.check_circle_rounded,
+        color: _green,
+      ),
+      _MetricItem(
+        label: 'Gestionado',
+        value: _bs(_managedAmount(orders)),
+        icon: Icons.payments_rounded,
+        color: _gold,
+      ),
     ];
 
     return Container(
@@ -1737,12 +2512,20 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                   children: [
                     Text(
                       'Pedidos conectados al dashboard',
-                      style: TextStyle(color: _textDark, fontSize: 19, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                        color: _textDark,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     SizedBox(height: 4),
                     Text(
                       'Resumen rápido de órdenes para saltar directo a la ventana de pedidos.',
-                      style: TextStyle(color: _textSoft, fontSize: 12.5, height: 1.4),
+                      style: TextStyle(
+                        color: _textSoft,
+                        fontSize: 12.5,
+                        height: 1.4,
+                      ),
                     ),
                   ],
                 ),
@@ -1963,24 +2746,39 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                         children: [
                           Text(
                             'Pedido #${order.id ?? '-'}',
-                            style: const TextStyle(color: _textDark, fontSize: 14.5, fontWeight: FontWeight.w800),
+                            style: const TextStyle(
+                              color: _textDark,
+                              fontSize: 14.5,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '${_orderStatusText(order.state)} · ${_bs(order.amount)}',
-                            style: const TextStyle(color: _textSoft, fontSize: 12.3, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              color: _textSoft,
+                              fontSize: 12.3,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             _formatDateTime(order.registerDate),
-                            style: const TextStyle(color: _textSoft, fontSize: 11.8),
+                            style: const TextStyle(
+                              color: _textSoft,
+                              fontSize: 11.8,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     IconButton(
                       onPressed: _goToOrders,
-                      icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: _textSoft),
+                      icon: const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        size: 16,
+                        color: _textSoft,
+                      ),
                     ),
                   ],
                 ),
@@ -2035,10 +2833,30 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     required double moneyReference,
   }) {
     final metrics = [
-      _MetricItem(label: 'Productos', value: products.length.toString(), icon: Icons.inventory_2_outlined, color: _primary),
-      _MetricItem(label: 'Activos', value: _activeProducts(products).toString(), icon: Icons.check_circle_outline, color: _green),
-      _MetricItem(label: 'Unidades', value: _totalUnits(products).toString(), icon: Icons.layers_outlined, color: _primaryDark),
-      _MetricItem(label: 'Promedio', value: '${_money(_averagePrice(products))} mon.', icon: Icons.payments_outlined, color: _orange),
+      _MetricItem(
+        label: 'Productos',
+        value: products.length.toString(),
+        icon: Icons.inventory_2_outlined,
+        color: _primary,
+      ),
+      _MetricItem(
+        label: 'Activos',
+        value: _activeProducts(products).toString(),
+        icon: Icons.check_circle_outline,
+        color: _green,
+      ),
+      _MetricItem(
+        label: 'Pausados',
+        value: _pausedProducts(products).toString(),
+        icon: Icons.pause_circle_outline_rounded,
+        color: _purple,
+      ),
+      _MetricItem(
+        label: 'Promedio',
+        value: '${_money(_averagePrice(products))} mon.',
+        icon: Icons.payments_outlined,
+        color: _orange,
+      ),
     ];
 
     return Container(
@@ -2279,7 +3097,11 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               color: _green.withOpacity(0.10),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: const Icon(Icons.check_circle_outline_rounded, color: _green, size: 28),
+            child: const Icon(
+              Icons.check_circle_outline_rounded,
+              color: _green,
+              size: 28,
+            ),
           ),
           const SizedBox(height: 14),
           const Text(
@@ -2360,9 +3182,18 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _buildSoftInfoChip(icon: Icons.payments_outlined, text: '${_money(product.price)} mon. / ${product.unit ?? 'unidad'}'),
-              _buildSoftInfoChip(icon: Icons.inventory_2_outlined, text: 'Stock ${product.stock}'),
-              _buildSoftInfoChip(icon: Icons.event_outlined, text: _formatDate(product.harvestDate)),
+              _buildSoftInfoChip(
+                icon: Icons.payments_outlined,
+                text: '${_money(product.price)} mon. / ${product.unit ?? 'unidad'}',
+              ),
+              _buildSoftInfoChip(
+                icon: Icons.inventory_2_outlined,
+                text: 'Stock ${product.stock}',
+              ),
+              _buildSoftInfoChip(
+                icon: Icons.event_outlined,
+                text: _formatDate(product.harvestDate),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -2384,6 +3215,71 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
+  Widget _buildStatusBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSoftInfoChip({
+    required IconData icon,
+    required String text,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: _textSoft),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              color: _textSoft,
+              fontSize: 11.8,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTinyStatusChip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11.8,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
   Widget _buildRecentProductsSection({
     required double screenWidth,
     required List<ProductModel> recentProducts,
@@ -2391,36 +3287,50 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Productos recientes',
-                    style: TextStyle(color: _textDark, fontSize: 19, fontWeight: FontWeight.w800),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Un catálogo más bonito, más visual y mejor para móvil.',
-                    style: TextStyle(color: _textSoft, fontSize: 12.5, height: 1.4),
-                  ),
-                ],
-              ),
-            ),
-            TextButton(
-              onPressed: _goToProducts,
-              child: const Text(
-                'Ver todos',
-                style: TextStyle(color: _primaryDark, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
+        const Text(
+          'Productos recientes',
+          style: TextStyle(color: _textDark, fontSize: 19, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Una vista más linda y más cercana al estilo del dashboard del cliente.',
+          style: TextStyle(color: _textSoft, fontSize: 12.5, height: 1.4),
         ),
         const SizedBox(height: 12),
         if (recentProducts.isEmpty)
-          _buildEmptyProductsCard()
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _surface.withOpacity(0.98),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: _border),
+            ),
+            child: const Column(
+              children: [
+                Icon(Icons.storefront_outlined, size: 52, color: _textSoft),
+                SizedBox(height: 12),
+                Text(
+                  'Todavía no publicaste productos',
+                  style: TextStyle(
+                    color: _textDark,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Publica tu primer producto para verlo aquí con un diseño más visual.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: _textSoft,
+                    fontSize: 12.8,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          )
         else
           GridView.builder(
             itemCount: recentProducts.length,
@@ -2430,11 +3340,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               crossAxisCount: _productGridCount(screenWidth),
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: screenWidth >= 1300
-                  ? 0.90
-                  : screenWidth >= 850
-                  ? 0.82
-                  : 0.92,
+              childAspectRatio: screenWidth >= 850 ? 1.10 : 0.96,
             ),
             itemBuilder: (_, index) => _buildProductCard(recentProducts[index]),
           ),
@@ -2442,90 +3348,56 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildEmptyProductsCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: _surface.withOpacity(0.98),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _divider),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: _primary.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Icon(Icons.inventory_2_outlined, color: _primary, size: 28),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Aún no tienes productos publicados',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _textDark, fontSize: 16.5, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Cuando publiques productos, aquí aparecerán con un diseño más tipo catálogo comercial.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _textSoft, fontSize: 12.5, height: 1.4),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildProductCard(ProductModel product) {
     final statusColor = _productStatusColor(product);
-    final statusText = _productStatusText(product);
+    final bytes = _decodeImageBytes(product.picture);
 
     return Container(
       decoration: BoxDecoration(
         color: _surface.withOpacity(0.98),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: _divider),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 14,
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
             offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 170,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF3EBDD),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-            ),
-            child: product.picture != null && product.picture!.isNotEmpty
-                ? ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-              child: Image.network(
-                product.picture!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) {
-                  return const Center(
-                    child: Icon(Icons.image_not_supported_outlined, color: _primary, size: 34),
-                  );
-                },
+      child: InkWell(
+        borderRadius: BorderRadius.circular(28),
+        onTap: _goToProducts,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: _surfaceMuted,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                  child: _isNetworkImage(product.picture)
+                      ? Image.network(
+                    product.picture!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _buildProductImagePlaceholder(),
+                  )
+                      : bytes != null
+                      ? Image.memory(
+                    bytes,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _buildProductImagePlaceholder(),
+                  )
+                      : _buildProductImagePlaceholder(),
+                ),
               ),
-            )
-                : const Center(
-              child: Icon(Icons.inventory_2_outlined, color: _primary, size: 34),
             ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -2536,136 +3408,246 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                           product.name,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: _textDark, fontSize: 17, fontWeight: FontWeight.w800),
+                          style: const TextStyle(
+                            color: _textDark,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      _buildStatusBadge(statusText, statusColor),
+                      _buildStatusBadge(_productStatusText(product), statusColor),
                     ],
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    product.description ?? 'Sin descripción disponible.',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: _textSoft, fontSize: 12.5, height: 1.35),
+                    _harvestLabel(product.harvestDate),
+                    style: const TextStyle(
+                      color: _textSoft,
+                      fontSize: 12.2,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildSoftInfoChip(
+                        icon: Icons.payments_outlined,
+                        text: '${_money(product.price)} mon.',
+                      ),
+                      _buildSoftInfoChip(
+                        icon: Icons.scale_outlined,
+                        text: product.unit ?? 'unidad',
+                      ),
+                      _buildSoftInfoChip(
+                        icon: Icons.inventory_2_outlined,
+                        text: 'Stock ${product.stock}',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductImagePlaceholder() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFF6EEE2), Color(0xFFE9DBC7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.inventory_2_outlined,
+          size: 52,
+          color: _primaryDark,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationTile(NotificationModel item) {
+    final color = _notificationTypeColor(item.type);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: item.isRead ? Colors.white : color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: item.isRead ? _border : color.withOpacity(0.24),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(_notificationTypeIcon(item.type), color: color, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          style: const TextStyle(
+                            color: _textDark,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (!item.isRead)
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: _red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    item.message,
+                    style: const TextStyle(
+                      color: _textSoft,
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _buildSoftInfoChip(
+                        icon: _notificationTypeIcon(item.type),
+                        text: _notificationTypeLabel(item.type),
+                      ),
+                      _buildSoftInfoChip(
+                        icon: Icons.schedule_rounded,
+                        text: _formatDateTime(item.createdAt),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _buildSoftInfoChip(icon: Icons.payments_outlined, text: '${_money(product.price)} mon. / ${product.unit ?? 'unidad'}'),
-                      _buildSoftInfoChip(icon: Icons.inventory_2_outlined, text: 'Stock ${product.stock}'),
-                      _buildSoftInfoChip(icon: Icons.calendar_month_outlined, text: _harvestLabel(product.harvestDate)),
+                      if (!item.isRead && item.id != null)
+                        FilledButton.icon(
+                          onPressed: () async {
+                            await context.read<NotificationController>().markAsRead(item.id!);
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          icon: const Icon(Icons.done_rounded, size: 18),
+                          label: const Text('Marcar leída'),
+                        ),
+                      if (item.id != null)
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            await context.read<NotificationController>().deleteNotification(item.id!);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _red,
+                            side: BorderSide(color: _red.withOpacity(0.25)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                          label: const Text('Eliminar'),
+                        ),
                     ],
-                  ),
-                  const Spacer(),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _goToProducts,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _primaryDark,
-                        side: BorderSide(color: _divider),
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      icon: const Icon(Icons.storefront_outlined, size: 18),
-                      label: const Text('Gestionar'),
-                    ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSoftInfoChip({required IconData icon, required String text}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: _surfaceMuted,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: _divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: _primaryDark),
-          const SizedBox(width: 5),
-          Text(
-            text,
-            style: const TextStyle(color: _textSoft, fontSize: 11.5, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.10),
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: color.withOpacity(0.18)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBottomNavigationBar() {
-    final items = <_BottomNavData>[
-      const _BottomNavData(icon: Icons.home_rounded, label: 'Inicio', index: 0),
-      const _BottomNavData(icon: Icons.storefront_rounded, label: 'Productos', index: 1),
-      const _BottomNavData(icon: Icons.receipt_long_rounded, label: 'Pedidos', index: 2),
-      const _BottomNavData(icon: Icons.bar_chart_rounded, label: 'Ventas', index: 3),
-      const _BottomNavData(icon: Icons.account_balance_wallet_rounded, label: 'Monedas', index: 4),
-      const _BottomNavData(icon: Icons.person_rounded, label: 'Perfil', index: 5),
-    ];
-
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              height: 84,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.88),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: Colors.white.withOpacity(0.65)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(child: _buildBottomNavItem(items[0], selected: true)),
-                  Expanded(child: _buildBottomNavItem(items[1], selected: false)),
-                  Expanded(child: _buildBottomNavItem(items[2], selected: false)),
-                  const SizedBox(width: 62),
-                  Expanded(child: _buildBottomNavItem(items[3], selected: false)),
-                  Expanded(child: _buildBottomNavItem(items[4], selected: false)),
-                  Expanded(child: _buildBottomNavItem(items[5], selected: false)),
-                ],
-              ),
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          height: 88,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.92),
+            border: Border(
+              top: BorderSide(color: _border.withOpacity(0.85)),
+            ),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildNavItem(
+                  icon: Icons.dashboard_customize_outlined,
+                  label: 'Inicio',
+                  selected: true,
+                  onTap: () => _onBottomNavigationTap(0),
+                ),
+                _buildNavItem(
+                  icon: Icons.storefront_outlined,
+                  label: 'Productos',
+                  onTap: () => _onBottomNavigationTap(1),
+                ),
+                _buildNavItem(
+                  icon: Icons.receipt_long_rounded,
+                  label: 'Pedidos',
+                  onTap: () => _onBottomNavigationTap(2),
+                ),
+                const SizedBox(width: 40),
+                _buildNavItem(
+                  icon: Icons.bar_chart_rounded,
+                  label: 'Ventas',
+                  onTap: () => _onBottomNavigationTap(3),
+                ),
+                _buildNavItem(
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Monedas',
+                  onTap: () => _onBottomNavigationTap(4),
+                ),
+                _buildNavItem(
+                  icon: Icons.person_outline_rounded,
+                  label: 'Perfil',
+                  onTap: () => _onBottomNavigationTap(5),
+                ),
+              ],
             ),
           ),
         ),
@@ -2673,34 +3655,34 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     );
   }
 
-  Widget _buildBottomNavItem(_BottomNavData item, {required bool selected}) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => _onBottomNavigationTap(item.index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? _primary.withOpacity(0.14) : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(item.icon, size: 21, color: selected ? _primaryDark : _textSoft),
-            const SizedBox(height: 4),
-            Text(
-              item.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? _primaryDark : _textSoft,
-                fontSize: 10.6,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    bool selected = false,
+    required VoidCallback onTap,
+  }) {
+    final color = selected ? _primary : _textSoft;
+
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: double.infinity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11.2,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2734,17 +3716,5 @@ class _MetricItem {
     required this.value,
     required this.icon,
     required this.color,
-  });
-}
-
-class _BottomNavData {
-  final IconData icon;
-  final String label;
-  final int index;
-
-  const _BottomNavData({
-    required this.icon,
-    required this.label,
-    required this.index,
   });
 }
