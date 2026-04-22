@@ -8,6 +8,7 @@ import '../../controllers/product_controller.dart';
 import '../../controllers/user_controller.dart';
 import '../../models/product_model.dart';
 import 'producer_coins_view.dart';
+import 'producer_create_product_view.dart';
 import 'producer_dashboard_view.dart';
 import 'producer_orders_view.dart';
 import 'producer_products_view.dart';
@@ -22,26 +23,29 @@ class ProducerSalesStatsView extends StatefulWidget {
 }
 
 class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
-  static const Color _bgTop = Color(0xFFF8F2EA);
-  static const Color _bgMid = Color(0xFFF3E9DD);
-  static const Color _bgBottom = Color(0xFFE8D7C4);
+  static const Color _bgTop = Color(0xFFF7F2EA);
+  static const Color _bgMid = Color(0xFFF2E8DB);
+  static const Color _bgBottom = Color(0xFFE7D8C6);
 
   static const Color _surface = Colors.white;
   static const Color _surfaceSoft = Color(0xFFFFFCF8);
+  static const Color _surfaceMuted = Color(0xFFF8F2E9);
 
-  static const Color _primary = Color(0xFFC89B5D);
-  static const Color _primaryDark = Color(0xFF8B6847);
-  static const Color _gold = Color(0xFFE5BB7A);
-  static const Color _green = Color(0xFF4B7D63);
-  static const Color _orange = Color(0xFFD37A34);
-  static const Color _red = Color(0xFFBE6041);
+  static const Color _primary = Color(0xFFC69A5B);
+  static const Color _primaryDark = Color(0xFF8A6848);
+  static const Color _gold = Color(0xFFE0B56E);
+  static const Color _green = Color(0xFF43795C);
+  static const Color _orange = Color(0xFFD97A33);
+  static const Color _red = Color(0xFFBC5F39);
   static const Color _blue = Color(0xFF5E7FA3);
+  static const Color _purple = Color(0xFF7A67A8);
 
-  static const Color _textDark = Color(0xFF4A3428);
-  static const Color _textSoft = Color(0xFF8A7360);
-  static const Color _border = Color(0xFFEADACA);
+  static const Color _textDark = Color(0xFF4B3427);
+  static const Color _textSoft = Color(0xFF857261);
+  static const Color _border = Color(0xFFEEE3D5);
+  static const Color _divider = Color(0xFFE7DACA);
 
-  static const int _currentNavIndex = 2;
+  static const int _currentNavIndex = 3;
 
   DateTime? _lastSyncedAt;
   bool _isRefreshing = false;
@@ -116,12 +120,12 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
 
   EdgeInsets _pagePadding(double width) {
     if (width >= 1200) {
-      return const EdgeInsets.fromLTRB(28, 16, 28, 120);
+      return const EdgeInsets.fromLTRB(28, 16, 28, 170);
     }
     if (width >= 800) {
-      return const EdgeInsets.fromLTRB(20, 14, 20, 120);
+      return const EdgeInsets.fromLTRB(20, 14, 20, 170);
     }
-    return const EdgeInsets.fromLTRB(16, 12, 16, 120);
+    return const EdgeInsets.fromLTRB(16, 12, 16, 170);
   }
 
   double _maxWidth(double width) {
@@ -238,6 +242,25 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
     );
   }
 
+  Future<void> _openCreateProduct() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const ProducerCreateProductView()),
+    );
+
+    if (created == true) {
+      await _loadStats();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Producto publicado correctamente'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _onBottomNavigationTap(int index) async {
     switch (index) {
       case 0:
@@ -247,12 +270,15 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
         await _goToProducts();
         break;
       case 2:
-        await _loadStats();
+        await _goToOrders();
         break;
       case 3:
-        await _goToCoins();
+        await _loadStats();
         break;
       case 4:
+        await _goToCoins();
+        break;
+      case 5:
         await _goToProfile();
         break;
     }
@@ -273,7 +299,7 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
             gradient: const LinearGradient(
-              colors: [_primary, Color(0xFFB78449)],
+              colors: [_primary, Color(0xFFB9854A)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -392,17 +418,17 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
         borderRadius: BorderRadius.circular(32),
         gradient: const LinearGradient(
           colors: [
-            Color(0xFF5A483F),
-            Color(0xFF7A5F47),
-            Color(0xFFC89B5D),
+            Color(0xFF5A4A41),
+            Color(0xFF443832),
+            Color(0xFF302826),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: _primaryDark.withOpacity(0.28),
-            blurRadius: 28,
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 24,
             offset: const Offset(0, 14),
           ),
         ],
@@ -600,8 +626,7 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
     required ProducerSalesStats stats,
     required double width,
   }) {
-    final completion =
-    (_safeRatio(stats.completedOrders, stats.totalOrders) * 100)
+    final completion = (_safeRatio(stats.completedOrders, stats.totalOrders) * 100)
         .clamp(0.0, 100.0);
     final attentionNeeded = stats.pendingOrders + stats.cancelledOrders;
     final isWide = width >= 860;
@@ -1013,7 +1038,7 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
   Widget _buildBottomNavigationBar() {
     final items = <_BottomNavData>[
       const _BottomNavData(
-        icon: Icons.home_rounded,
+        icon: Icons.grid_view_rounded,
         label: 'Inicio',
         index: 0,
       ),
@@ -1023,57 +1048,60 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
         index: 1,
       ),
       const _BottomNavData(
-        icon: Icons.bar_chart_rounded,
-        label: 'Ventas',
+        icon: Icons.receipt_long_rounded,
+        label: 'Pedidos',
         index: 2,
       ),
       const _BottomNavData(
-        icon: Icons.account_balance_wallet_rounded,
-        label: 'Monedas',
+        icon: Icons.bar_chart_rounded,
+        label: 'Ventas',
         index: 3,
       ),
       const _BottomNavData(
-        icon: Icons.person_rounded,
-        label: 'Perfil',
+        icon: Icons.account_balance_wallet_outlined,
+        label: 'Monedas',
         index: 4,
+      ),
+      const _BottomNavData(
+        icon: Icons.person_outline_rounded,
+        label: 'Perfil',
+        index: 5,
       ),
     ];
 
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(30),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              height: 82,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.88),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: Colors.white.withOpacity(0.65)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            height: 94,
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.88),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+              border: Border(
+                top: BorderSide(color: Colors.white.withOpacity(0.70)),
               ),
-              child: Row(
-                children: items
-                    .map(
-                      (item) => Expanded(
-                    child: _buildBottomNavItem(
-                      item,
-                      selected: item.index == _currentNavIndex,
-                    ),
-                  ),
-                )
-                    .toList(),
-              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 22,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(child: _buildBottomNavItem(items[0], selected: false)),
+                Expanded(child: _buildBottomNavItem(items[1], selected: false)),
+                Expanded(child: _buildBottomNavItem(items[2], selected: false)),
+                const SizedBox(width: 72),
+                Expanded(child: _buildBottomNavItem(items[3], selected: true)),
+                Expanded(child: _buildBottomNavItem(items[4], selected: false)),
+                Expanded(child: _buildBottomNavItem(items[5], selected: false)),
+              ],
             ),
           ),
         ),
@@ -1090,9 +1118,9 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           decoration: BoxDecoration(
-            color: selected ? _primary.withOpacity(0.14) : Colors.transparent,
+            color: Colors.transparent,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
@@ -1101,7 +1129,7 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
               Icon(
                 item.icon,
                 size: 22,
-                color: selected ? _primaryDark : _textSoft,
+                color: selected ? _primary : _textSoft,
               ),
               const SizedBox(height: 4),
               Text(
@@ -1109,8 +1137,8 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected ? _primaryDark : _textSoft,
-                  fontSize: 11.1,
+                  color: selected ? _primary : _textSoft,
+                  fontSize: 11.2,
                   fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
@@ -1160,6 +1188,16 @@ class _ProducerSalesStatsViewState extends State<ProducerSalesStatsView> {
     return Scaffold(
       extendBody: true,
       backgroundColor: _bgTop,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: FloatingActionButton(
+          backgroundColor: _primary,
+          elevation: 12,
+          onPressed: _openCreateProduct,
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
+        ),
+      ),
       bottomNavigationBar: _buildBottomNavigationBar(),
       body: Container(
         decoration: const BoxDecoration(
@@ -1686,8 +1724,7 @@ class _TopProductCard extends StatelessWidget {
             width: double.infinity,
             decoration: BoxDecoration(
               color: const Color(0xFFF3EBDD),
-              borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(28)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
               gradient: LinearGradient(
                 colors: [
                   primary.withOpacity(0.12),

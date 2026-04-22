@@ -8,21 +8,30 @@ import 'interfaces/i_product_service.dart';
 class ProductService implements IProductService {
   final DBConnection _db = DBConnection.instance;
 
-  /// Top 5 productos más vendidos (por valor de inventario: precio × stock)
+  /// Top 5 productos más vendidos
+  /// Nota: esta consulta sigue usando el valor de inventario (precio × stock)
+  /// para no romper tu lógica actual.
   @override
   Future<List<TopProductItem>> getTopSellingProducts() async {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute('''
-        SELECT p.ID, p.UserID AS producerId, p.name, p.picture, p.price, p.stock,
-               COALESCE(p.unit, 'unidades') AS unit,
-               u.name AS producerName
-        FROM Product p
-        JOIN User u ON u.ID = p.UserID AND u.state = 1
+        SELECT
+          p.ID,
+          p.UserID AS producerId,
+          p.name,
+          p.picture,
+          p.price,
+          p.stock,
+          COALESCE(p.unit, 'unidades') AS unit,
+          u.name AS producerName
+        FROM product p
+        JOIN user u ON u.ID = p.UserID AND u.state = 1
         WHERE p.state = 1
         ORDER BY (p.price * p.stock) DESC
         LIMIT 5
       ''');
+
       return result.rows.map((row) {
         final m = row.assoc();
         return TopProductItem(
@@ -50,10 +59,12 @@ class ProductService implements IProductService {
 
       final result = await conn.execute(
         '''
-        SELECT *
-        FROM Product
-        WHERE UserID = :producerID
-        ORDER BY ID DESC
+        SELECT
+          p.*,
+          p.familyID AS familyID
+        FROM product p
+        WHERE p.UserID = :producerID
+        ORDER BY p.ID DESC
         ''',
         {'producerID': producerID},
       );
@@ -79,10 +90,32 @@ class ProductService implements IProductService {
 
       await conn.execute(
         '''
-        INSERT INTO Product
-        (name, picture, description, price, unit, stock, state, HarvestDate, UserID)
+        INSERT INTO product
+        (
+          name,
+          picture,
+          description,
+          price,
+          unit,
+          stock,
+          state,
+          HarvestDate,
+          UserID,
+          familyID
+        )
         VALUES
-        (:name, :picture, :description, :price, :unit, :stock, :state, :harvestDate, :userID)
+        (
+          :name,
+          :picture,
+          :description,
+          :price,
+          :unit,
+          :stock,
+          :state,
+          :harvestDate,
+          :userID,
+          :familyID
+        )
         ''',
         {
           'name': product.name.trim(),
@@ -94,6 +127,7 @@ class ProductService implements IProductService {
           'state': product.state,
           'harvestDate': _formatDateTimeForSql(product.harvestDate),
           'userID': product.userID,
+          'familyID': product.familyID,
         },
       );
 
@@ -113,7 +147,7 @@ class ProductService implements IProductService {
 
       await conn.execute(
         '''
-        UPDATE Product
+        UPDATE product
         SET stock = :stock
         WHERE ID = :id
         ''',
@@ -144,7 +178,7 @@ class ProductService implements IProductService {
 
       await conn.execute(
         '''
-        UPDATE Product SET
+        UPDATE product SET
           name = :name,
           picture = :picture,
           description = :description,
@@ -152,7 +186,8 @@ class ProductService implements IProductService {
           unit = :unit,
           stock = :stock,
           state = :state,
-          HarvestDate = :harvestDate
+          HarvestDate = :harvestDate,
+          familyID = :familyID
         WHERE ID = :id
         ''',
         {
@@ -164,6 +199,7 @@ class ProductService implements IProductService {
           'stock': product.stock,
           'state': product.state,
           'harvestDate': _formatDateTimeForSql(product.harvestDate),
+          'familyID': product.familyID,
           'id': product.id,
         },
       );

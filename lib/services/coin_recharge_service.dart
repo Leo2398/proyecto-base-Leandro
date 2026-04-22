@@ -10,7 +10,7 @@ class CoinRechargeService {
     try {
       final conn = await _db.getConnection();
       await conn.execute('''
-        CREATE TABLE IF NOT EXISTS CoinRecharge (
+        CREATE TABLE IF NOT EXISTS coinrecharge (
           ID INT AUTO_INCREMENT PRIMARY KEY,
           userID INT NOT NULL,
           coinsRequested INT NOT NULL,
@@ -38,7 +38,7 @@ class CoinRechargeService {
       final conn = await _db.getConnection();
       await conn.execute(
         '''
-        INSERT INTO CoinRecharge (userID, coinsRequested, amountPaid, proofImage, status)
+        INSERT INTO coinrecharge (userID, coinsRequested, amountPaid, proofImage, status)
         VALUES (:userId, :coins, :amount, :proof, 'pending')
         ''',
         {
@@ -55,36 +55,66 @@ class CoinRechargeService {
     }
   }
 
-  /// Todas las solicitudes pendientes (JOIN con User para datos del solicitante)
+  /// Todas las solicitudes pendientes (JOIN con user para datos del solicitante)
   Future<List<CoinRechargeModel>> getPendingRequests() async {
-    return _queryRequests("WHERE cr.status = 'pending'");
-  }
-
-  /// Todas las solicitudes (historial completo)
-  Future<List<CoinRechargeModel>> getAllRequests() async {
-    return _queryRequests('');
-  }
-
-  /// Solicitudes de un usuario específico
-  Future<List<CoinRechargeModel>> getRequestsByUser(int userId) async {
-    return _queryRequests('WHERE cr.userID = $userId');
-  }
-
-  Future<List<CoinRechargeModel>> _queryRequests(String where) async {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute('''
         SELECT cr.*, u.name AS userName, u.email AS userEmail, u.image AS userImage
-        FROM CoinRecharge cr
-        JOIN User u ON u.ID = cr.userID
-        $where
+        FROM coinrecharge cr
+        JOIN user u ON u.ID = cr.userID
+        WHERE cr.status = 'pending'
         ORDER BY cr.requestDate DESC
       ''');
       return result.rows
           .map((r) => CoinRechargeModel.fromMap(r.assoc()))
           .toList();
     } catch (e) {
-      print('Error en _queryRequests: $e');
+      print('Error en getPendingRequests: $e');
+      return [];
+    }
+  }
+
+  /// Todas las solicitudes (historial completo)
+  Future<List<CoinRechargeModel>> getAllRequests() async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute('''
+        SELECT cr.*, u.name AS userName, u.email AS userEmail, u.image AS userImage
+        FROM coinrecharge cr
+        JOIN user u ON u.ID = cr.userID
+        ORDER BY cr.requestDate DESC
+      ''');
+      return result.rows
+          .map((r) => CoinRechargeModel.fromMap(r.assoc()))
+          .toList();
+    } catch (e) {
+      print('Error en getAllRequests: $e');
+      return [];
+    }
+  }
+
+  /// Solicitudes de un usuario específico
+  Future<List<CoinRechargeModel>> getRequestsByUser(int userId) async {
+    try {
+      final conn = await _db.getConnection();
+      final result = await conn.execute(
+        '''
+        SELECT cr.*, u.name AS userName, u.email AS userEmail, u.image AS userImage
+        FROM coinrecharge cr
+        JOIN user u ON u.ID = cr.userID
+        WHERE cr.userID = :userId
+        ORDER BY cr.requestDate DESC
+        ''',
+        {
+          'userId': userId,
+        },
+      );
+      return result.rows
+          .map((r) => CoinRechargeModel.fromMap(r.assoc()))
+          .toList();
+    } catch (e) {
+      print('Error en getRequestsByUser: $e');
       return [];
     }
   }
@@ -96,18 +126,21 @@ class CoinRechargeService {
 
       // 1. Obtener los datos de la solicitud
       final res = await conn.execute(
-        'SELECT * FROM CoinRecharge WHERE ID = :id',
+        'SELECT * FROM coinrecharge WHERE ID = :id',
         {'id': requestId},
       );
       if (res.rows.isEmpty) return false;
+
       final data = res.rows.first.assoc();
       final userId = int.tryParse(data['userID']?.toString() ?? '') ?? 0;
       final coins = int.tryParse(data['coinsRequested']?.toString() ?? '') ?? 0;
 
+      if (userId <= 0 || coins <= 0) return false;
+
       // 2. Actualizar estado de la solicitud
       await conn.execute(
         '''
-        UPDATE CoinRecharge
+        UPDATE coinrecharge
         SET status = 'approved', resolvedDate = NOW()
         WHERE ID = :id
         ''',
@@ -116,7 +149,7 @@ class CoinRechargeService {
 
       // 3. Agregar monedas al balance del usuario
       await conn.execute(
-        'UPDATE User SET balance = balance + :coins WHERE ID = :userId',
+        'UPDATE user SET balance = balance + :coins WHERE ID = :userId',
         {'coins': coins, 'userId': userId},
       );
 
@@ -133,7 +166,7 @@ class CoinRechargeService {
       final conn = await _db.getConnection();
       await conn.execute(
         '''
-        UPDATE CoinRecharge
+        UPDATE coinrecharge
         SET status = 'rejected', resolvedDate = NOW()
         WHERE ID = :id
         ''',

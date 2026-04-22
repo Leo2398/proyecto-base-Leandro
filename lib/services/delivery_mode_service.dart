@@ -14,30 +14,34 @@ class DeliveryModeService implements IDeliveryModeService {
   Future<List<DeliveryModeModel>> getAll() async {
     try {
       final conn = await _db.getConnection();
-      final result = await conn.execute('SELECT * FROM DeliveryMode');
-      
-      developer.log('DeliveryMode - Total rows: ${result.rows.length}');
-      
+      final result = await conn.execute('SELECT * FROM deliverymode');
+
+      developer.log('deliverymode - Total rows: ${result.rows.length}');
+
       if (result.rows.isNotEmpty) {
-        developer.log('DeliveryMode - Primera fila: ${result.rows.first.assoc()}');
+        developer.log(
+          'deliverymode - Primera fila: ${result.rows.first.assoc()}',
+        );
       }
 
       final modes = result.rows
           .map((row) {
-            try {
-              return DeliveryModeModel.fromMap(row.assoc());
-            } catch (e) {
-              developer.log('Error parseando DeliveryMode: $e, data: ${row.assoc()}');
-              rethrow;
-            }
-          })
+        try {
+          return DeliveryModeModel.fromMap(row.assoc());
+        } catch (e) {
+          developer.log(
+            'Error parseando deliverymode: $e, data: ${row.assoc()}',
+          );
+          rethrow;
+        }
+      })
           .toList();
-          
-      developer.log('✓ DeliveryMode cargadas exitosamente: ${modes.length}');
+
+      developer.log('✓ deliverymode cargadas exitosamente: ${modes.length}');
       return modes;
     } catch (e) {
-        print('Error en getAll: $e');
-          return [];
+      print('Error en getAll: $e');
+      return [];
     }
   }
 }

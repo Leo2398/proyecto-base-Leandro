@@ -19,6 +19,7 @@ import 'producer_create_product_view.dart';
 import 'producer_orders_view.dart';
 import 'producer_products_view.dart';
 import 'producer_profile_view.dart';
+import 'producer_reviews_view.dart';
 import 'producer_sales_stats_view.dart';
 
 class ProducerDashboardView extends StatefulWidget {
@@ -49,6 +50,12 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   static const Color _textSoft = Color(0xFF857261);
   static const Color _border = Color(0xFFEEE3D5);
   static const Color _divider = Color(0xFFE7DACA);
+
+  static const int _statePending = 0;
+  static const int _statePreparing = 1;
+  static const int _stateShipped = 2;
+  static const int _stateCompleted = 3;
+  static const int _stateCancelled = 4;
 
   DateTime? _lastSyncedAt;
   bool _isRefreshing = false;
@@ -185,28 +192,32 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   }
 
   int _pendingOrders(List<OrderModel> orders) {
-    return orders.where((o) => o.state == 0).length;
+    return orders.where((o) => o.state == _statePending).length;
   }
 
-  int _acceptedOrders(List<OrderModel> orders) {
-    return orders.where((o) => o.state == 1).length;
+  int _preparingOrders(List<OrderModel> orders) {
+    return orders.where((o) => o.state == _statePreparing).length;
   }
 
-  int _deliveredOrders(List<OrderModel> orders) {
-    return orders.where((o) => o.state == 2).length;
+  int _shippedOrders(List<OrderModel> orders) {
+    return orders.where((o) => o.state == _stateShipped).length;
+  }
+
+  int _completedOrders(List<OrderModel> orders) {
+    return orders.where((o) => o.state == _stateCompleted).length;
   }
 
   int _cancelledOrders(List<OrderModel> orders) {
-    return orders.where((o) => o.state == 3).length;
+    return orders.where((o) => o.state == _stateCancelled).length;
   }
 
   double _managedAmount(List<OrderModel> orders) {
     return orders.fold(0.0, (sum, order) => sum + order.amount);
   }
 
-  double _deliveredAmount(List<OrderModel> orders) {
+  double _completedAmount(List<OrderModel> orders) {
     return orders
-        .where((o) => o.state == 2)
+        .where((o) => o.state == _stateCompleted)
         .fold(0.0, (sum, order) => sum + order.amount);
   }
 
@@ -297,13 +308,15 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
 
   String _orderStatusText(int state) {
     switch (state) {
-      case 0:
+      case _statePending:
         return 'Pendiente';
-      case 1:
-        return 'Aceptado';
-      case 2:
-        return 'Entregado';
-      case 3:
+      case _statePreparing:
+        return 'En preparación';
+      case _stateShipped:
+        return 'Enviado';
+      case _stateCompleted:
+        return 'Completado';
+      case _stateCancelled:
         return 'Cancelado';
       default:
         return 'Desconocido';
@@ -312,13 +325,15 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
 
   Color _orderStatusColor(int state) {
     switch (state) {
-      case 0:
+      case _statePending:
         return _orange;
-      case 1:
+      case _statePreparing:
         return _blue;
-      case 2:
+      case _stateShipped:
+        return _purple;
+      case _stateCompleted:
         return _green;
-      case 3:
+      case _stateCancelled:
         return _red;
       default:
         return _textSoft;
@@ -327,13 +342,15 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
 
   IconData _orderStatusIcon(int state) {
     switch (state) {
-      case 0:
+      case _statePending:
         return Icons.schedule_rounded;
-      case 1:
+      case _statePreparing:
         return Icons.inventory_2_rounded;
-      case 2:
+      case _stateShipped:
+        return Icons.local_shipping_rounded;
+      case _stateCompleted:
         return Icons.check_circle_rounded;
-      case 3:
+      case _stateCancelled:
         return Icons.cancel_rounded;
       default:
         return Icons.help_outline_rounded;
@@ -425,7 +442,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
   }
 
   int _orderMetricCrossAxisCount(double width) {
-    if (width >= 1200) return 5;
+    if (width >= 1200) return 6;
     if (width >= 850) return 3;
     return 2;
   }
@@ -488,6 +505,16 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const ProducerProfileView()),
+    );
+
+    if (!mounted) return;
+    await _loadDashboardData();
+  }
+
+  Future<void> _goToReviews() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProducerReviewsView()),
     );
 
     if (!mounted) return;
@@ -1394,6 +1421,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         onSelected: (value) {
           if (value == 'notifications') {
             _showNotificationsSheet();
+          } else if (value == 'reviews') {
+            _goToReviews();
           } else if (value == 'refresh') {
             _loadDashboardData();
           } else if (value == 'logout') {
@@ -1408,6 +1437,16 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 Icon(Icons.notifications_none_rounded, size: 18),
                 SizedBox(width: 10),
                 Text('Ver notificaciones'),
+              ],
+            ),
+          ),
+          PopupMenuItem<String>(
+            value: 'reviews',
+            child: Row(
+              children: [
+                Icon(Icons.star_rounded, size: 18),
+                SizedBox(width: 10),
+                Text('Ver reseñas'),
               ],
             ),
           ),
@@ -1564,7 +1603,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Hola, $userName. Desde aquí puedes revisar productos, pedidos, monedas y ahora también notificaciones en tiempo real.',
+                      'Hola, $userName. Desde aquí puedes revisar productos, pedidos, monedas, reseñas y notificaciones en tiempo real.',
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.78),
                         fontSize: 12.8,
@@ -1626,8 +1665,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 value: orders.length.toString(),
               ),
               _buildHeroMiniCard(
-                title: 'Entregados',
-                value: _deliveredOrders(orders).toString(),
+                title: 'Completados',
+                value: _completedOrders(orders).toString(),
               ),
               _buildHeroMiniCard(
                 title: 'Referencia',
@@ -1650,7 +1689,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Estado general: $stockText · ${_pendingOrders(orders)} pedidos pendientes · $unreadCount notificaciones sin leer',
+                    'Estado general: $stockText · ${_pendingOrders(orders)} pendientes · ${_preparingOrders(orders)} en preparación · $unreadCount notificaciones sin leer',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.96),
                       fontSize: 12.5,
@@ -1685,10 +1724,27 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _showNotificationsSheet,
+                  onPressed: _goToReviews,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: _textDark,
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.star_rounded, size: 18),
+                  label: const Text('Reseñas y calificaciones'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _showNotificationsSheet,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.18),
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
@@ -1720,7 +1776,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _showNotificationsSheet,
+                  onPressed: _goToReviews,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: _textDark,
@@ -1729,14 +1785,14 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  icon: const Icon(Icons.notifications_outlined, size: 18),
-                  label: const Text('Notificaciones'),
+                  icon: const Icon(Icons.star_rounded, size: 18),
+                  label: const Text('Ver reseñas'),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _goToCreateProduct,
+                  onPressed: _showNotificationsSheet,
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white.withOpacity(0.18),
                     foregroundColor: Colors.white,
@@ -1745,8 +1801,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  icon: const Icon(Icons.add_box_outlined, size: 18),
-                  label: const Text('Publicar producto'),
+                  icon: const Icon(Icons.notifications_outlined, size: 18),
+                  label: const Text('Notificaciones'),
                 ),
               ),
             ],
@@ -2178,6 +2234,13 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         onTap: _goToProfile,
       ),
       _ActionItem(
+        title: 'Reseñas',
+        subtitle: 'Opiniones y calificaciones',
+        icon: Icons.star_rounded,
+        color: _orange,
+        onTap: _goToReviews,
+      ),
+      _ActionItem(
         title: 'Avisos',
         subtitle: 'Ver notificaciones',
         icon: Icons.notifications_outlined,
@@ -2474,16 +2537,28 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
         color: _orange,
       ),
       _MetricItem(
-        label: 'Aceptados',
-        value: _acceptedOrders(orders).toString(),
+        label: 'En preparación',
+        value: _preparingOrders(orders).toString(),
         icon: Icons.inventory_2_rounded,
         color: _blue,
       ),
       _MetricItem(
-        label: 'Entregados',
-        value: _deliveredOrders(orders).toString(),
+        label: 'Enviados',
+        value: _shippedOrders(orders).toString(),
+        icon: Icons.local_shipping_rounded,
+        color: _purple,
+      ),
+      _MetricItem(
+        label: 'Completados',
+        value: _completedOrders(orders).toString(),
         icon: Icons.check_circle_rounded,
         color: _green,
+      ),
+      _MetricItem(
+        label: 'Cancelados',
+        value: _cancelledOrders(orders).toString(),
+        icon: Icons.cancel_rounded,
+        color: _red,
       ),
       _MetricItem(
         label: 'Gestionado',
@@ -2608,8 +2683,8 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               const SizedBox(width: 10),
               Expanded(
                 child: _buildMiniStatPanel(
-                  title: 'Entregado',
-                  value: _bs(_deliveredAmount(orders)),
+                  title: 'Completado',
+                  value: _bs(_completedAmount(orders)),
                   color: _green,
                 ),
               ),
@@ -2628,7 +2703,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
               const SizedBox(width: 10),
               Expanded(
                 child: _buildMiniStatPanel(
-                  title: 'Por aceptar',
+                  title: 'Por atender',
                   value: _pendingOrders(orders).toString(),
                   color: _orange,
                 ),

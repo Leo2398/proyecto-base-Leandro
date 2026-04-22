@@ -10,11 +10,11 @@ class ReportService {
 
   String _fmt(DateTime dt) =>
       '${dt.year.toString().padLeft(4, '0')}-'
-      '${dt.month.toString().padLeft(2, '0')}-'
-      '${dt.day.toString().padLeft(2, '0')} '
-      '${dt.hour.toString().padLeft(2, '0')}:'
-      '${dt.minute.toString().padLeft(2, '0')}:'
-      '${dt.second.toString().padLeft(2, '0')}';
+          '${dt.month.toString().padLeft(2, '0')}-'
+          '${dt.day.toString().padLeft(2, '0')} '
+          '${dt.hour.toString().padLeft(2, '0')}:'
+          '${dt.minute.toString().padLeft(2, '0')}:'
+          '${dt.second.toString().padLeft(2, '0')}';
 
   double _toDouble(dynamic v) {
     if (v == null) return 0.0;
@@ -44,8 +44,8 @@ class ReportService {
         SELECT u.ID, u.name,
                COUNT(DISTINCT p.ID) AS totalProductos,
                COALESCE(SUM(p.price * p.stock), 0) AS totalVentas
-        FROM User u
-        LEFT JOIN Product p
+        FROM user u
+        LEFT JOIN product p
           ON p.UserID = u.ID
           AND p.state = 1
           AND (p.HarvestDate IS NULL
@@ -84,7 +84,7 @@ class ReportService {
       final result = await conn.execute(
         '''
         SELECT u.ID, u.name, u.email, u.balance
-        FROM User u
+        FROM user u
         WHERE u.role = 0 AND u.state = 1
           AND (u.registerDate IS NULL
                OR (u.registerDate >= :from AND u.registerDate <= :to))
@@ -121,8 +121,8 @@ class ReportService {
         SELECT p.name, p.price, p.stock,
                COALESCE(p.unit, 'unidades') AS unit,
                u.name AS producerName
-        FROM Product p
-        JOIN User u ON u.ID = p.UserID AND u.state = 1
+        FROM product p
+        JOIN user u ON u.ID = p.UserID AND u.state = 1
         WHERE p.state = 1
           AND (p.HarvestDate IS NULL
                OR (p.HarvestDate >= :from AND p.HarvestDate <= :to))
@@ -156,11 +156,11 @@ class ReportService {
                COUNT(DISTINCT ppf.ProducerID) AS totalEmpresas,
                COUNT(DISTINCT p.ID)           AS totalProductos,
                COALESCE(SUM(p.price * p.stock), 0) AS totalVentas
-        FROM ProductFamily pf
-        LEFT JOIN ProducerProductFamily ppf ON ppf.FamilyID = pf.ID
-        LEFT JOIN User u
+        FROM productfamily pf
+        LEFT JOIN producerproductfamily ppf ON ppf.FamilyID = pf.ID
+        LEFT JOIN user u
           ON u.ID = ppf.ProducerID AND u.state = 1 AND u.role = 1
-        LEFT JOIN Product p
+        LEFT JOIN product p
           ON p.UserID = u.ID AND p.state = 1
         GROUP BY pf.ID, pf.name
         ORDER BY totalVentas DESC

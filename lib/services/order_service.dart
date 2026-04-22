@@ -38,7 +38,7 @@ class OrderService implements IOrderService {
         final balanceResult = await conn.execute(
           '''
           SELECT balance
-          FROM User
+          FROM user
           WHERE ID = :clientID
           FOR UPDATE
           ''',
@@ -79,7 +79,7 @@ class OrderService implements IOrderService {
               price,
               stock,
               state
-            FROM Product
+            FROM product
             WHERE ID = :productID
               AND UserID = :producerID
             LIMIT 1
@@ -164,7 +164,7 @@ class OrderService implements IOrderService {
         /// 3) Crear cabecera del pedido con total recalculado
         await conn.execute(
           '''
-          INSERT INTO Orders (
+          INSERT INTO orders (
             amount,
             state,
             pickupLocationID,
@@ -208,7 +208,7 @@ class OrderService implements IOrderService {
         for (final detail in normalizedDetails) {
           final stockResult = await conn.execute(
             '''
-            UPDATE Product
+            UPDATE product
             SET stock = stock - :quantity
             WHERE ID = :productID
               AND UserID = :producerID
@@ -233,7 +233,7 @@ class OrderService implements IOrderService {
 
           await conn.execute(
             '''
-            INSERT INTO OrderDetail (
+            INSERT INTO orderdetail (
               OrderID,
               ProductID,
               Quantity,
@@ -257,7 +257,7 @@ class OrderService implements IOrderService {
         /// 5) Descontar saldo dentro de la misma transacción
         final balanceUpdateResult = await conn.execute(
           '''
-          UPDATE User
+          UPDATE user
           SET balance = balance - :amount
           WHERE ID = :clientID
             AND balance >= :amount
@@ -308,8 +308,8 @@ class OrderService implements IOrderService {
           o.*,
           pl.address AS pickupLocationAddress,
           NULL AS notes
-        FROM Orders o
-        LEFT JOIN PickupLocation pl
+        FROM orders o
+        LEFT JOIN pickuplocation pl
           ON pl.LocationID = o.pickupLocationID
         WHERE o.ClientID = :clientID
         ORDER BY o.registerDate DESC, o.UniqueID DESC
@@ -339,8 +339,8 @@ class OrderService implements IOrderService {
           o.*,
           pl.address AS pickupLocationAddress,
           NULL AS notes
-        FROM Orders o
-        LEFT JOIN PickupLocation pl
+        FROM orders o
+        LEFT JOIN pickuplocation pl
           ON pl.LocationID = o.pickupLocationID
         WHERE o.ProducerID = :producerID
         ORDER BY o.registerDate DESC, o.UniqueID DESC
@@ -367,7 +367,7 @@ class OrderService implements IOrderService {
       final result = await conn.execute(
         '''
         SELECT *
-        FROM OrderDetail
+        FROM orderdetail
         WHERE OrderID = :orderID
         ''',
         {
@@ -401,7 +401,7 @@ class OrderService implements IOrderService {
             amount,
             ClientID,
             ProducerID
-          FROM Orders
+          FROM orders
           WHERE UniqueID = :orderID
           LIMIT 1
           FOR UPDATE
@@ -449,7 +449,7 @@ class OrderService implements IOrderService {
             SELECT
               ProductID,
               Quantity
-            FROM OrderDetail
+            FROM orderdetail
             WHERE OrderID = :orderID
             ''',
             {
@@ -473,7 +473,7 @@ class OrderService implements IOrderService {
 
             final stockRestoreResult = await conn.execute(
               '''
-              UPDATE Product
+              UPDATE product
               SET stock = stock + :quantity
               WHERE ID = :productID
                 AND UserID = :producerID
@@ -498,7 +498,7 @@ class OrderService implements IOrderService {
           if (amount > 0 && clientID > 0) {
             final refundResult = await conn.execute(
               '''
-              UPDATE User
+              UPDATE user
               SET balance = balance + :amount
               WHERE ID = :clientID
               ''',
@@ -521,7 +521,7 @@ class OrderService implements IOrderService {
 
         final result = await conn.execute(
           '''
-          UPDATE Orders
+          UPDATE orders
           SET state = :state
           WHERE UniqueID = :orderID
           ''',

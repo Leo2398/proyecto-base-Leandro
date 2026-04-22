@@ -7,6 +7,7 @@ import 'controllers/notification_controller.dart';
 import 'controllers/order_controller.dart';
 import 'controllers/product_controller.dart';
 import 'controllers/request_controller.dart';
+import 'controllers/review_controller.dart';
 import 'controllers/user_controller.dart';
 
 import 'services/coin_movement_service.dart';
@@ -52,6 +53,9 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<NotificationController>(
           create: (_) => NotificationController(),
+        ),
+        ChangeNotifierProvider<ReviewController>(
+          create: (_) => ReviewController(),
         ),
       ],
       child: MaterialApp(

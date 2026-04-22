@@ -13,8 +13,10 @@ class PasswordResetService implements IPasswordResetService {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        '''INSERT INTO PasswordResetToken (token, userID, expiresAt, used)
-        VALUES (:token, :userID, :expiresAt, 0)''',
+        '''
+        INSERT INTO passwordresettoken (token, userID, expiresAt, used)
+        VALUES (:token, :userID, :expiresAt, 0)
+        ''',
         {
           'token': token.token,
           'userID': token.userID,
@@ -32,41 +34,51 @@ class PasswordResetService implements IPasswordResetService {
   }
 
   /// Obtiene el token más reciente válido de un usuario
-Future<PasswordResetTokenModel?> getValidToken(int userID, String token) async {
-  try {
-    final conn = await _db.getConnection();
-    
-    /// Debug: busca sin filtros para ver qué hay en la BD
-    final debug = await conn.execute(
-      'SELECT * FROM PasswordResetToken WHERE userID = :userID ORDER BY ID DESC LIMIT 1',
-      {'userID': userID},
-    );
-    
-    if (debug.rows.isNotEmpty) {
-      print('Token en BD: ${debug.rows.first.assoc()}');
-    } else {
-      print('No hay tokens para este usuario');
+  Future<PasswordResetTokenModel?> getValidToken(int userID, String token) async {
+    try {
+      final conn = await _db.getConnection();
+
+      /// Debug: busca sin filtros para ver qué hay en la BD
+      final debug = await conn.execute(
+        '''
+        SELECT * FROM passwordresettoken
+        WHERE userID = :userID
+        ORDER BY ID DESC
+        LIMIT 1
+        ''',
+        {'userID': userID},
+      );
+
+      if (debug.rows.isNotEmpty) {
+        print('Token en BD: ${debug.rows.first.assoc()}');
+      } else {
+        print('No hay tokens para este usuario');
+      }
+
+      final result = await conn.execute(
+        '''
+        SELECT * FROM passwordresettoken
+        WHERE userID = :userID
+          AND token = :token
+          AND used = 0
+          AND expiresAt > UTC_TIMESTAMP()
+        ORDER BY ID DESC
+        LIMIT 1
+        ''',
+        {
+          'userID': userID,
+          'token': token,
+        },
+      );
+
+      if (result.rows.isEmpty) return null;
+
+      return PasswordResetTokenModel.fromMap(result.rows.first.assoc());
+    } catch (e) {
+      print('Error en getValidToken: $e');
+      return null;
     }
-
-    final result = await conn.execute(
-  '''SELECT * FROM PasswordResetToken 
-  WHERE userID = :userID 
-  AND token = :token 
-  AND used = '0'
-  AND expiresAt > UTC_TIMESTAMP()
-  ORDER BY ID DESC 
-  LIMIT 1''',
-  {'userID': userID, 'token': token},
-);
-
-    if (result.rows.isEmpty) return null;
-
-    return PasswordResetTokenModel.fromMap(result.rows.first.assoc());
-  } catch (e) {
-    print('Error en getValidToken: $e');
-    return null;
   }
-}
 
   /// Marca el token como usado
   @override
@@ -74,7 +86,7 @@ Future<PasswordResetTokenModel?> getValidToken(int userID, String token) async {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        'UPDATE PasswordResetToken SET used = 1 WHERE ID = :id',
+        'UPDATE passwordresettoken SET used = 1 WHERE ID = :id',
         {'id': tokenID},
       );
       return true;
@@ -90,7 +102,7 @@ Future<PasswordResetTokenModel?> getValidToken(int userID, String token) async {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        'DELETE FROM PasswordResetToken WHERE userID = :userID',
+        'DELETE FROM passwordresettoken WHERE userID = :userID',
         {'userID': userID},
       );
       return true;

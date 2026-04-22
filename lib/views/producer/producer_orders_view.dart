@@ -10,9 +10,11 @@ import '../../models/order_detail_model.dart';
 import '../../models/order_model.dart';
 import '../../models/product_model.dart';
 import 'producer_coins_view.dart';
+import 'producer_create_product_view.dart';
 import 'producer_dashboard_view.dart';
 import 'producer_products_view.dart';
 import 'producer_profile_view.dart';
+import 'producer_sales_stats_view.dart';
 
 class ProducerOrdersView extends StatefulWidget {
   const ProducerOrdersView({super.key});
@@ -43,27 +45,27 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
     'Cancelados',
   ];
 
-  static const Color _bgTop = Color(0xFFF8F2EA);
-  static const Color _bgMid = Color(0xFFF3E9DD);
-  static const Color _bgBottom = Color(0xFFE8D6C1);
+  static const Color _bgTop = Color(0xFFF7F2EA);
+  static const Color _bgMid = Color(0xFFF2E8DB);
+  static const Color _bgBottom = Color(0xFFE7D8C6);
 
-  static const Color _primary = Color(0xFFC89B5D);
-  static const Color _primaryDark = Color(0xFF8B6847);
-  static const Color _gold = Color(0xFFE5BB7A);
-  static const Color _green = Color(0xFF467C5E);
-  static const Color _orange = Color(0xFFD67B35);
-  static const Color _red = Color(0xFFB95C40);
+  static const Color _primary = Color(0xFFC69A5B);
+  static const Color _primaryDark = Color(0xFF8A6848);
+  static const Color _gold = Color(0xFFE0B56E);
+  static const Color _green = Color(0xFF43795C);
+  static const Color _orange = Color(0xFFD97A33);
+  static const Color _red = Color(0xFFBC5F39);
   static const Color _blue = Color(0xFF5E7FA3);
-  static const Color _purple = Color(0xFF7A6CCF);
+  static const Color _purple = Color(0xFF7A67A8);
 
   static const Color _surface = Colors.white;
   static const Color _surfaceSoft = Color(0xFFFFFCF8);
-  static const Color _surfaceMuted = Color(0xFFF8F1E8);
+  static const Color _surfaceMuted = Color(0xFFF8F2E9);
 
-  static const Color _textDark = Color(0xFF4A3428);
-  static const Color _textSoft = Color(0xFF8A7360);
-  static const Color _border = Color(0xFFEADACA);
-  static const Color _divider = Color(0xFFE8DCCD);
+  static const Color _textDark = Color(0xFF4B3427);
+  static const Color _textSoft = Color(0xFF857261);
+  static const Color _border = Color(0xFFEEE3D5);
+  static const Color _divider = Color(0xFFE7DACA);
 
   @override
   void initState() {
@@ -124,13 +126,12 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
     final query = _searchController.text.toLowerCase().trim();
 
     final filtered = orders.where((order) {
-      final matchesSearch =
-          query.isEmpty ||
-              (order.id?.toString().contains(query) ?? false) ||
-              order.clientID.toString().contains(query) ||
-              order.pickupLocationID.toString().contains(query) ||
-              _getStateText(order.state).toLowerCase().contains(query) ||
-              _formatCurrency(order.amount).toLowerCase().contains(query);
+      final matchesSearch = query.isEmpty ||
+          (order.id?.toString().contains(query) ?? false) ||
+          order.clientID.toString().contains(query) ||
+          order.pickupLocationID.toString().contains(query) ||
+          _getStateText(order.state).toLowerCase().contains(query) ||
+          _formatCurrency(order.amount).toLowerCase().contains(query);
 
       final matchesFilter = switch (_selectedFilter) {
         'Pendientes' => order.state == _statePending,
@@ -324,12 +325,12 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
 
   EdgeInsets _responsivePadding(double width) {
     if (width >= 1200) {
-      return const EdgeInsets.fromLTRB(28, 16, 28, 190);
+      return const EdgeInsets.fromLTRB(28, 16, 28, 170);
     }
     if (width >= 800) {
-      return const EdgeInsets.fromLTRB(20, 14, 20, 190);
+      return const EdgeInsets.fromLTRB(20, 14, 20, 170);
     }
-    return const EdgeInsets.fromLTRB(16, 12, 16, 190);
+    return const EdgeInsets.fromLTRB(16, 12, 16, 170);
   }
 
   double _maxContentWidth(double width) {
@@ -359,6 +360,13 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
     );
   }
 
+  Future<void> _goToSalesStats() async {
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const ProducerSalesStatsView()),
+    );
+  }
+
   Future<void> _goToCoins() async {
     await Navigator.pushReplacement(
       context,
@@ -373,6 +381,25 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
     );
   }
 
+  Future<void> _openCreateProduct() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const ProducerCreateProductView()),
+    );
+
+    if (created == true) {
+      await _loadOrders();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Producto publicado correctamente'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _onBottomNavigationTap(int index) async {
     switch (index) {
       case 0:
@@ -382,9 +409,15 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
         await _goToProducts();
         break;
       case 2:
-        await _goToCoins();
+        await _loadOrders();
         break;
       case 3:
+        await _goToSalesStats();
+        break;
+      case 4:
+        await _goToCoins();
+        break;
+      case 5:
         await _goToProfile();
         break;
     }
@@ -586,13 +619,17 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
           content: Text(
             'Pedido #${order.id} actualizado a ${_getStateText(selectedState)}',
           ),
+          behavior: SnackBarBehavior.floating,
         ),
       );
     } else {
       final message =
           orderController.errorMessage ?? 'No se pudo actualizar el pedido.';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -628,19 +665,19 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [
-            _primaryDark,
-            const Color(0xFF9A7553),
-            _primary,
+            Color(0xFF5A4A41),
+            Color(0xFF443832),
+            Color(0xFF302826),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: _primaryDark.withOpacity(0.28),
-            blurRadius: 28,
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 24,
             offset: const Offset(0, 14),
           ),
         ],
@@ -648,93 +685,9 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: _goToDashboard,
-                child: Ink(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.16)),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.14),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.14)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.sync_rounded,
-                      color: Colors.white,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _formatLastSync(_lastSyncedAt),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11.8,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(
-            'Gestión de pedidos del productor',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.88),
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.4,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Administra, revisa y actualiza los pedidos de $producerName',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 27,
-              fontWeight: FontWeight.w900,
-              height: 1.18,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Visualiza pedidos recibidos, confirma los nuevos, cambia su estado y mantén el control del flujo de atención desde una sola pantalla.',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.88),
-              fontSize: 13.6,
-              height: 1.45,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 18),
           Wrap(
-            spacing: 10,
-            runSpacing: 10,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _QuickBadge(
                 icon: Icons.schedule_rounded,
@@ -758,8 +711,110 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
               ),
             ],
           ),
+          const SizedBox(height: 18),
+          Text(
+            producerName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 29,
+              height: 1.02,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Controla el flujo completo de tus pedidos con una vista más limpia, moderna y consistente con el dashboard.',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.78),
+              fontSize: 13,
+              height: 1.45,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildHeroMetric(
+                    icon: Icons.receipt_long_rounded,
+                    title: 'Pedidos',
+                    value: _totalOrders(orders).toString(),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 36,
+                  color: Colors.white.withOpacity(0.10),
+                ),
+                Expanded(
+                  child: _buildHeroMetric(
+                    icon: Icons.auto_graph_rounded,
+                    title: 'Gestionado',
+                    value: _formatCurrency(_managedAmount(orders)),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHeroMetric({
+    required IconData icon,
+    required String title,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(icon, color: Colors.white, size: 20),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -1341,10 +1396,13 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
                               : isCancelled
                               ? _red.withOpacity(0.92)
                               : _green.withOpacity(0.92),
-                          disabledBackgroundColor: isCancelled
+                          disabledBackgroundColor: canUpdate
+                              ? _primary
+                              : isCancelled
                               ? _red.withOpacity(0.84)
                               : _green.withOpacity(0.88),
                           foregroundColor: Colors.white,
+                          disabledForegroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
@@ -1511,7 +1569,7 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
   Widget _buildBottomNavigationBar() {
     final items = <_BottomNavData>[
       const _BottomNavData(
-        icon: Icons.home_rounded,
+        icon: Icons.grid_view_rounded,
         label: 'Inicio',
         index: 0,
       ),
@@ -1521,57 +1579,60 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
         index: 1,
       ),
       const _BottomNavData(
-        icon: Icons.account_balance_wallet_rounded,
-        label: 'Monedas',
+        icon: Icons.receipt_long_rounded,
+        label: 'Pedidos',
         index: 2,
       ),
       const _BottomNavData(
-        icon: Icons.person_rounded,
-        label: 'Perfil',
+        icon: Icons.bar_chart_rounded,
+        label: 'Ventas',
         index: 3,
+      ),
+      const _BottomNavData(
+        icon: Icons.account_balance_wallet_outlined,
+        label: 'Monedas',
+        index: 4,
+      ),
+      const _BottomNavData(
+        icon: Icons.person_outline_rounded,
+        label: 'Perfil',
+        index: 5,
       ),
     ];
 
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              height: 82,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.86),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withOpacity(0.65)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 22,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            height: 94,
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.88),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+              border: Border(
+                top: BorderSide(color: Colors.white.withOpacity(0.70)),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildBottomNavItem(items[0], selected: false),
-                  ),
-                  Expanded(
-                    child: _buildBottomNavItem(items[1], selected: false),
-                  ),
-                  const SizedBox(width: 68),
-                  Expanded(
-                    child: _buildBottomNavItem(items[2], selected: false),
-                  ),
-                  Expanded(
-                    child: _buildBottomNavItem(items[3], selected: false),
-                  ),
-                ],
-              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 22,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(child: _buildBottomNavItem(items[0], selected: false)),
+                Expanded(child: _buildBottomNavItem(items[1], selected: false)),
+                Expanded(child: _buildBottomNavItem(items[2], selected: true)),
+                const SizedBox(width: 72),
+                Expanded(child: _buildBottomNavItem(items[3], selected: false)),
+                Expanded(child: _buildBottomNavItem(items[4], selected: false)),
+                Expanded(child: _buildBottomNavItem(items[5], selected: false)),
+              ],
             ),
           ),
         ),
@@ -1586,9 +1647,9 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? _primary.withOpacity(0.14) : Colors.transparent,
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Column(
@@ -1597,7 +1658,7 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
             Icon(
               item.icon,
               size: 22,
-              color: selected ? _primaryDark : _textSoft,
+              color: selected ? _primary : _textSoft,
             ),
             const SizedBox(height: 4),
             Text(
@@ -1605,8 +1666,8 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: selected ? _primaryDark : _textSoft,
-                fontSize: 11.3,
+                color: selected ? _primary : _textSoft,
+                fontSize: 11.2,
                 fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
               ),
             ),
@@ -1638,27 +1699,11 @@ class _ProducerOrdersViewState extends State<ProducerOrdersView> {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 10),
-        child: FloatingActionButton.extended(
+        child: FloatingActionButton(
           backgroundColor: _primary,
           elevation: 12,
-          onPressed: _isRefreshing ? null : _loadOrders,
-          icon: _isRefreshing
-              ? const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.2,
-              color: Colors.white,
-            ),
-          )
-              : const Icon(Icons.refresh_rounded, color: Colors.white),
-          label: Text(
-            _isRefreshing ? 'Actualizando' : 'Actualizar',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
+          onPressed: _openCreateProduct,
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
         ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
@@ -2227,12 +2272,12 @@ class _OrderDetailsSheet extends StatelessWidget {
                               style: TextStyle(
                                 color: _hasNotes ? textDark : textSoft,
                                 fontSize: 14,
-                                fontWeight: _hasNotes
-                                    ? FontWeight.w700
-                                    : FontWeight.w600,
+                                fontWeight:
+                                _hasNotes ? FontWeight.w700 : FontWeight.w600,
                                 height: 1.45,
-                                fontStyle:
-                                _hasNotes ? FontStyle.normal : FontStyle.italic,
+                                fontStyle: _hasNotes
+                                    ? FontStyle.normal
+                                    : FontStyle.italic,
                               ),
                             ),
                           ),
@@ -2617,18 +2662,20 @@ class _MiniInsightCard extends StatelessWidget {
               color: color.withOpacity(0.13),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: color, size: 22),
+            child: Icon(icon, color: color),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF8A7360),
-                    fontSize: 12.1,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -2639,7 +2686,7 @@ class _MiniInsightCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF4A3428),
-                    fontSize: 15.2,
+                    fontSize: 16.5,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -2650,11 +2697,48 @@ class _MiniInsightCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF8A7360),
-                    fontSize: 11.8,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _QuickBadge({
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.06)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -2679,90 +2763,38 @@ class _InfoPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(minWidth: 130),
-      padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(18),
+        color: Colors.white.withOpacity(0.88),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFEADACA)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Color(0xFF8A7360),
-                    fontSize: 11.4,
-                    fontWeight: FontWeight.w700,
-                  ),
+          Icon(icon, size: 16, color: iconColor),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Color(0xFF857261),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xFF4A3428),
-                    fontSize: 12.8,
-                    fontWeight: FontWeight.w800,
-                  ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Color(0xFF4B3427),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickBadge extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _QuickBadge({
-    required this.icon,
-    required this.label,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 10,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.14)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: Colors.white),
-          const SizedBox(width: 7),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12.1,
-              fontWeight: FontWeight.w800,
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -2791,124 +2823,158 @@ class _OrderProgressStepper extends StatelessWidget {
     required this.softText,
   });
 
-  bool _isStepActive(int index) {
-    if (state == 4) {
-      return index == 4;
-    }
-    if (state == 0) return index == 0;
-    if (state == 1) return index <= 1;
-    if (state == 2) return index <= 2;
-    if (state == 3) return index <= 3;
-    return false;
-  }
-
-  Color _stepColor(int index) {
-    switch (index) {
-      case 0:
-        return pendingColor;
-      case 1:
-        return preparingColor;
-      case 2:
-        return shippedColor;
-      case 3:
-        return completedColor;
-      case 4:
-        return cancelledColor;
-      default:
-        return softText;
-    }
+  bool _isReached(int stepState) {
+    if (state == _ProducerOrdersViewState._stateCancelled) return false;
+    return state >= stepState;
   }
 
   @override
   Widget build(BuildContext context) {
-    const labels = [
-      'Pendiente',
-      'En preparación',
-      'Enviado',
-      'Completado',
-      'Cancelado',
-    ];
-
-    const icons = [
-      Icons.schedule_rounded,
-      Icons.inventory_2_rounded,
-      Icons.local_shipping_rounded,
-      Icons.check_circle_rounded,
-      Icons.cancel_rounded,
-    ];
-
-    return Column(
-      children: [
-        Row(
-          children: List.generate(labels.length * 2 - 1, (i) {
-            if (i.isOdd) {
-              final leftStep = i ~/ 2;
-              final activeLine =
-                  state != 4 && _isStepActive(leftStep + 1) && leftStep < 3;
-
-              return Expanded(
-                child: Container(
-                  height: 3,
-                  margin: const EdgeInsets.symmetric(horizontal: 6),
-                  decoration: BoxDecoration(
-                    color: activeLine
-                        ? _stepColor(leftStep + 1).withOpacity(0.45)
-                        : dividerColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              );
-            }
-
-            final step = i ~/ 2;
-            final active = _isStepActive(step);
-            final color = _stepColor(step);
-
-            return Column(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: active
-                        ? color.withOpacity(0.14)
-                        : dividerColor.withOpacity(0.7),
-                    border: Border.all(
-                      color: active ? color : dividerColor,
-                    ),
-                  ),
-                  child: Icon(
-                    icons[step],
-                    size: 18,
-                    color: active ? color : softText.withOpacity(0.65),
-                  ),
-                ),
-              ],
-            );
-          }),
+    if (state == _ProducerOrdersViewState._stateCancelled) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cancelledColor.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cancelledColor.withOpacity(0.18)),
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: labels.map((label) {
-            final index = labels.indexOf(label);
-            final active = _isStepActive(index);
-            final color = _stepColor(index);
-
-            return Expanded(
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: active ? color : softText,
-                  fontSize: 10.7,
-                  fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-                ),
+        child: Row(
+          children: [
+            Icon(Icons.cancel_rounded, color: cancelledColor),
+            const SizedBox(width: 8),
+            Text(
+              'Este pedido fue cancelado.',
+              style: TextStyle(
+                color: cancelledColor,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
               ),
-            );
-          }).toList(),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: _ProgressNode(
+            label: 'Pendiente',
+            reached: _isReached(_ProducerOrdersViewState._statePending),
+            color: pendingColor,
+            icon: Icons.schedule_rounded,
+            softText: softText,
+          ),
+        ),
+        _ProgressLine(active: _isReached(_ProducerOrdersViewState._statePreparing), color: preparingColor, dividerColor: dividerColor),
+        Expanded(
+          child: _ProgressNode(
+            label: 'Preparación',
+            reached: _isReached(_ProducerOrdersViewState._statePreparing),
+            color: preparingColor,
+            icon: Icons.inventory_2_rounded,
+            softText: softText,
+          ),
+        ),
+        _ProgressLine(active: _isReached(_ProducerOrdersViewState._stateShipped), color: shippedColor, dividerColor: dividerColor),
+        Expanded(
+          child: _ProgressNode(
+            label: 'Enviado',
+            reached: _isReached(_ProducerOrdersViewState._stateShipped),
+            color: shippedColor,
+            icon: Icons.local_shipping_rounded,
+            softText: softText,
+          ),
+        ),
+        _ProgressLine(active: _isReached(_ProducerOrdersViewState._stateCompleted), color: completedColor, dividerColor: dividerColor),
+        Expanded(
+          child: _ProgressNode(
+            label: 'Completado',
+            reached: _isReached(_ProducerOrdersViewState._stateCompleted),
+            color: completedColor,
+            icon: Icons.check_circle_rounded,
+            softText: softText,
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _ProgressNode extends StatelessWidget {
+  final String label;
+  final bool reached;
+  final Color color;
+  final IconData icon;
+  final Color softText;
+
+  const _ProgressNode({
+    required this.label,
+    required this.reached,
+    required this.color,
+    required this.icon,
+    required this.softText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: reached ? color : Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: reached ? color : const Color(0xFFE7DACA),
+              width: 2,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 17,
+            color: reached ? Colors.white : softText,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: reached ? const Color(0xFF4B3427) : softText,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProgressLine extends StatelessWidget {
+  final bool active;
+  final Color color;
+  final Color dividerColor;
+
+  const _ProgressLine({
+    required this.active,
+    required this.color,
+    required this.dividerColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        height: 3,
+        margin: const EdgeInsets.only(bottom: 18),
+        decoration: BoxDecoration(
+          color: active ? color : dividerColor,
+          borderRadius: BorderRadius.circular(999),
+        ),
+      ),
     );
   }
 }
@@ -2931,7 +2997,7 @@ class _DetailStat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -2946,7 +3012,7 @@ class _DetailStat extends StatelessWidget {
               color: color.withOpacity(0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Icon(icon, color: color, size: 22),
+            child: Icon(icon, color: color),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -2959,18 +3025,18 @@ class _DetailStat extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF8A7360),
-                    fontSize: 11.6,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Text(
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF4A3428),
-                    fontSize: 14.6,
+                    fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -2981,7 +3047,7 @@ class _DetailStat extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF8A7360),
-                    fontSize: 11.2,
+                    fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -3010,14 +3076,14 @@ class _SmallTag extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withOpacity(0.16)),
+        border: Border.all(color: color.withOpacity(0.18)),
       ),
       child: Text(
         text,
         style: TextStyle(
           color: color,
-          fontSize: 11.6,
-          fontWeight: FontWeight.w800,
+          fontSize: 11.2,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -3041,7 +3107,7 @@ class _SkeletonBox extends StatelessWidget {
       width: width == double.infinity ? null : width,
       height: height,
       decoration: BoxDecoration(
-        color: const Color(0xFFF1E6DA),
+        color: const Color(0xFFF0E6DA),
         borderRadius: BorderRadius.circular(radius),
       ),
     );

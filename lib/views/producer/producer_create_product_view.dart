@@ -357,10 +357,14 @@ class _ProducerCreateProductViewState
     }
 
     final userController = Provider.of<UserController>(context, listen: false);
-    final productController =
-    Provider.of<ProductController>(context, listen: false);
-    final coinController =
-    Provider.of<CoinMovementController>(context, listen: false);
+    final productController = Provider.of<ProductController>(
+      context,
+      listen: false,
+    );
+    final coinController = Provider.of<CoinMovementController>(
+      context,
+      listen: false,
+    );
 
     final currentUser = userController.currentUser;
 
@@ -438,8 +442,7 @@ class _ProducerCreateProductViewState
         state: _selectedStatus == 'Activo' ? 1 : 0,
         harvestDate: _harvestDate,
         userID: currentUser.id!,
-        // TODO: cuando actualices ProductModel y ProductService,
-        // agrega aquí: familyID: _selectedFamilyId,
+        familyID: _selectedFamilyId,
       );
 
       final success = await productController.createProduct(newProduct);

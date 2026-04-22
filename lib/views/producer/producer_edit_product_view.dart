@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 
 import '../../controllers/product_controller.dart';
 import '../../core/image_helper.dart';
+import '../../models/product_family_model.dart';
 import '../../models/product_model.dart';
+import '../../services/product_family_service.dart';
 
 class ProducerEditProductView extends StatefulWidget {
   final ProductModel product;
@@ -32,6 +34,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
   late final TextEditingController _stockController;
 
   final ImagePicker _picker = ImagePicker();
+  final ProductFamilyService _productFamilyService = ProductFamilyService();
 
   DateTime? _harvestDate;
   String _selectedUnit = 'kg';
@@ -39,6 +42,10 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
 
   File? _selectedImageFile;
   String? _imageBase64OrUrl;
+
+  List<ProductFamilyModel> _families = [];
+  int? _selectedFamilyId;
+  bool _isLoadingFamilies = false;
 
   bool _isPickingImage = false;
   bool _isSubmitting = false;
@@ -73,11 +80,14 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     _selectedStatus = product.state == 1 ? 'Activo' : 'Pausado';
     _harvestDate = product.harvestDate;
     _imageBase64OrUrl = _normalizeOptionalText(product.picture);
+    _selectedFamilyId = product.familyID;
 
     _nameController.addListener(_refreshPreview);
     _descriptionController.addListener(_refreshPreview);
     _priceController.addListener(_refreshPreview);
     _stockController.addListener(_refreshPreview);
+
+    _loadFamilies();
   }
 
   void _refreshPreview() {
@@ -98,6 +108,44 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     _priceController.dispose();
     _stockController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadFamilies() async {
+    try {
+      setState(() {
+        _isLoadingFamilies = true;
+      });
+
+      final families = await _productFamilyService.getAll();
+
+      if (!mounted) return;
+
+      setState(() {
+        _families = families;
+
+        if (_families.isNotEmpty) {
+          final exists = _families.any((f) => f.id == _selectedFamilyId);
+          _selectedFamilyId = exists ? _selectedFamilyId : _families.first.id;
+        } else {
+          _selectedFamilyId = null;
+        }
+
+        _isLoadingFamilies = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingFamilies = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF4E3426),
+          content: Text('Error cargando familias: $e'),
+        ),
+      );
+    }
   }
 
   Future<void> _selectDate() async {
@@ -295,6 +343,26 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
 
+    if (_families.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('No hay familias disponibles para seleccionar'),
+        ),
+      );
+      return;
+    }
+
+    if (_selectedFamilyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Color(0xFF4E3426),
+          content: Text('Selecciona la familia del producto'),
+        ),
+      );
+      return;
+    }
+
     if (_harvestDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -347,6 +415,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
         state: _selectedStatus == 'Activo' ? 1 : 0,
         harvestDate: _harvestDate,
         userID: widget.product.userID,
+        familyID: _selectedFamilyId,
       );
 
       final success = await productController.updateProduct(updatedProduct);
@@ -471,6 +540,17 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
     } catch (_) {
       return null;
     }
+  }
+
+  String _getSelectedFamilyName() {
+    if (_selectedFamilyId == null) return 'Familia pendiente';
+
+    final family = _families.cast<ProductFamilyModel?>().firstWhere(
+          (item) => item?.id == _selectedFamilyId,
+      orElse: () => null,
+    );
+
+    return family?.name ?? 'Familia pendiente';
   }
 
   Widget _buildProductImage({
@@ -847,7 +927,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Modifica foto, precio, stock, estado y fecha de cosecha para que tu publicación siga viéndose profesional.',
+                  'Modifica foto, familia, precio, stock, estado y fecha de cosecha para que tu publicación siga viéndose profesional.',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 13,
@@ -866,8 +946,8 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _buildHeroMiniStat(
-                        icon: Icons.edit_note_rounded,
-                        label: 'Edición',
+                        icon: Icons.category_outlined,
+                        label: 'Familia',
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1188,6 +1268,102 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
               fontSize: 14,
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFamilyDropdownCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFCF8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE8DED0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildFieldHeader(
+            title: 'Familia del producto',
+            icon: Icons.category_outlined,
+          ),
+          const SizedBox(height: 14),
+          if (_isLoadingFamilies)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: CircularProgressIndicator(
+                  color: Color(0xFFC69A5B),
+                ),
+              ),
+            )
+          else
+            DropdownButtonFormField<int>(
+              value: _selectedFamilyId,
+              items: _families
+                  .map(
+                    (family) => DropdownMenuItem<int>(
+                  value: family.id,
+                  child: Text(family.name),
+                ),
+              )
+                  .toList(),
+              onChanged: _families.isEmpty
+                  ? null
+                  : (value) {
+                setState(() {
+                  _selectedFamilyId = value;
+                });
+              },
+              validator: (value) => value == null ? 'Campo obligatorio' : null,
+              icon: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: Color(0xFF8A6A45),
+              ),
+              dropdownColor: Colors.white,
+              decoration: InputDecoration(
+                hintText: _families.isEmpty
+                    ? 'No hay familias disponibles'
+                    : 'Selecciona una familia',
+                hintStyle: const TextStyle(
+                  color: Color(0xFFAA9B8A),
+                  fontSize: 13,
+                ),
+                filled: true,
+                fillColor: const Color(0xFFF8F5EF),
+                contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Color(0xFFE6DDCF)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Color(0xFFE6DDCF)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFC69A5B),
+                    width: 1.4,
+                  ),
+                ),
+              ),
+              style: const TextStyle(
+                color: Color(0xFF4E3426),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
+            ),
         ],
       ),
     );
@@ -1665,6 +1841,12 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                         ),
                         const SizedBox(height: 10),
                         _buildPreviewInfo(
+                          Icons.category_outlined,
+                          _getSelectedFamilyName(),
+                          const Color(0xFF8A6A45),
+                        ),
+                        const SizedBox(height: 6),
+                        _buildPreviewInfo(
                           Icons.monetization_on_outlined,
                           _priceController.text.trim().isEmpty
                               ? 'Precio pendiente'
@@ -1727,7 +1909,10 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
   Widget _buildSaveButton() {
     return Consumer<ProductController>(
       builder: (context, productController, child) {
-        final isBusy = productController.isLoading || _isSubmitting;
+        final isBusy =
+            productController.isLoading ||
+                _isSubmitting ||
+                _isLoadingFamilies;
 
         return SizedBox(
           width: double.infinity,
@@ -1879,6 +2064,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                     ),
                                   ],
                                 ),
+                                _buildFamilyDropdownCard(),
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1929,6 +2115,7 @@ class _ProducerEditProductViewState extends State<ProducerEditProductView> {
                                     });
                                   },
                                 ),
+                                _buildFamilyDropdownCard(),
                                 _buildInputCard(
                                   title: 'Precio',
                                   hint: 'Ej. 4.5',

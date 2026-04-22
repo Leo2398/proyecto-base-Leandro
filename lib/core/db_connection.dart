@@ -30,12 +30,12 @@ class DBConnection {
       }
 
       _connection = await MySQLConnection.createConnection(
-        host: '10.0.2.2',
-        port: 3306,
+        host: 'mysql-141d5c3f-suarezmateo950-a1c5.d.aivencloud.com',
+        port: 22052,
         userName: 'app_user',
-        password: '123456',
-        databaseName: 'defaultdb',
-        secure: false,
+        password: 'AVNS_p5dIV65HBQ0aSpAhzMI',
+        databaseName: 'app_pedidos',
+        secure: true,
       );
 
       await _connection!.connect();

@@ -2,8 +2,6 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/coin_movement_controller.dart';
@@ -13,9 +11,11 @@ import '../../core/image_helper.dart';
 import '../../models/app_config_model.dart';
 import '../../models/request_model.dart';
 import 'producer_dashboard_view.dart';
+import 'producer_orders_view.dart';
 import 'producer_products_view.dart';
 import 'producer_profile_view.dart';
 import 'producer_reload_view.dart';
+import 'producer_sales_stats_view.dart';
 
 class ProducerCoinsView extends StatefulWidget {
   const ProducerCoinsView({super.key});
@@ -28,12 +28,6 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
   bool _initialLoadDone = false;
   DateTime? _lastUpdatedAt;
   RequestController? _requestController;
-
-  final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _descriptionController = TextEditingController();
-  final ImagePicker _picker = ImagePicker();
-
-  File? _selectedProofFile;
 
   static const Color _bgTop = Color(0xFFF8F2EA);
   static const Color _bgMid = Color(0xFFF3EADF);
@@ -66,8 +60,6 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
   @override
   void dispose() {
     _requestController?.onRequestStatusChanged = null;
-    _amountController.dispose();
-    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -174,10 +166,7 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
 
     await requestController.loadUserRequests(user.id!);
 
-
     if (!mounted) return;
-
-
   }
 
   Future<void> _goToDashboard() async {
@@ -193,6 +182,22 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     await Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const ProducerProductsView()),
+    );
+  }
+
+  Future<void> _goToOrders() async {
+    if (!mounted) return;
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const ProducerOrdersView()),
+    );
+  }
+
+  Future<void> _goToSalesStats() async {
+    if (!mounted) return;
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const ProducerSalesStatsView()),
     );
   }
 
@@ -213,9 +218,15 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
         await _goToProducts();
         break;
       case 2:
-        await _refreshData();
+        await _goToOrders();
         break;
       case 3:
+        await _goToSalesStats();
+        break;
+      case 4:
+        await _refreshData();
+        break;
+      case 5:
         await _goToProfile();
         break;
     }
@@ -270,20 +281,20 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
       backgroundColor: _bgTop,
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: FloatingActionButton.extended(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: FloatingActionButton(
           backgroundColor: _primary,
           elevation: 12,
           onPressed: (coinController.isBusy || requestController.isLoading)
               ? null
               : _goToReloadView,
-          icon: const Icon(Icons.add_card_rounded, color: Colors.white),
-          label: const Text(
-            'Solicitar',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: const Icon(
+            Icons.add_rounded,
+            color: Colors.white,
+            size: 30,
           ),
         ),
       ),
@@ -1403,136 +1414,6 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
     );
   }
 
-  Widget _buildSummaryLine(
-      String label,
-      String value, {
-        bool highlight = false,
-      }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: _softText,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13.5,
-              color: highlight ? _primaryDark : _brownText,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProofPicker({
-    required File? file,
-    required VoidCallback? onPick,
-    bool compact = false,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(compact ? 14 : 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFCF8),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Comprobante de pago',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: _brownText,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Adjunta una captura o foto del comprobante. Este campo es obligatorio para que se parezca al flujo del cliente.',
-            style: TextStyle(
-              fontSize: 13,
-              color: _softText,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (file != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Image.file(
-                file,
-                width: double.infinity,
-                height: compact ? 170 : 220,
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
-                filterQuality: FilterQuality.medium,
-                frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                  if (wasSynchronouslyLoaded || frame != null) {
-                    return child;
-                  }
-
-                  return Container(
-                    width: double.infinity,
-                    height: compact ? 170 : 220,
-                    color: const Color(0xFFF8F4EC),
-                    alignment: Alignment.center,
-                    child: const CircularProgressIndicator(color: _primary),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: double.infinity,
-                    height: compact ? 170 : 220,
-                    color: const Color(0xFFF8F4EC),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.broken_image_rounded,
-                      color: _primaryDark,
-                      size: 40,
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onPick,
-              icon: const Icon(Icons.upload_file_rounded),
-              label: Text(
-                file == null ? 'Adjuntar comprobante' : 'Cambiar comprobante',
-              ),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                foregroundColor: _primaryDark,
-                side: const BorderSide(color: _border),
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildStatusOverview({
     required int pendingCount,
     required int approvedCount,
@@ -2099,66 +1980,83 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
   Widget _buildBottomNavigationBar() {
     final items = <_BottomNavData>[
       const _BottomNavData(
-        icon: Icons.home_rounded,
+        icon: Icons.home_outlined,
+        activeIcon: Icons.home_rounded,
         label: 'Inicio',
         index: 0,
       ),
       const _BottomNavData(
-        icon: Icons.storefront_rounded,
+        icon: Icons.storefront_outlined,
+        activeIcon: Icons.storefront_rounded,
         label: 'Productos',
         index: 1,
       ),
       const _BottomNavData(
-        icon: Icons.account_balance_wallet_rounded,
-        label: 'Monedas',
+        icon: Icons.receipt_long_outlined,
+        activeIcon: Icons.receipt_long_rounded,
+        label: 'Pedidos',
         index: 2,
       ),
       const _BottomNavData(
-        icon: Icons.person_rounded,
-        label: 'Perfil',
+        icon: Icons.bar_chart_outlined,
+        activeIcon: Icons.bar_chart_rounded,
+        label: 'Ventas',
         index: 3,
+      ),
+      const _BottomNavData(
+        icon: Icons.account_balance_wallet_outlined,
+        activeIcon: Icons.account_balance_wallet_rounded,
+        label: 'Monedas',
+        index: 4,
+      ),
+      const _BottomNavData(
+        icon: Icons.person_outline_rounded,
+        activeIcon: Icons.person_rounded,
+        label: 'Perfil',
+        index: 5,
       ),
     ];
 
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(28),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              height: 82,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.86),
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withOpacity(0.65)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 22,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+        padding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+        child: Container(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 24,
+                offset: const Offset(0, -4),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildBottomNavItem(items[0], selected: false),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Container(
+                height: 88,
+                padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.92),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(30)),
+                  border: Border(
+                    top: BorderSide(color: _border.withOpacity(0.9)),
                   ),
-                  Expanded(
-                    child: _buildBottomNavItem(items[1], selected: false),
-                  ),
-                  const SizedBox(width: 68),
-                  Expanded(
-                    child: _buildBottomNavItem(items[2], selected: true),
-                  ),
-                  Expanded(
-                    child: _buildBottomNavItem(items[3], selected: false),
-                  ),
-                ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(child: _buildBottomNavItem(items[0], selected: false)),
+                    Expanded(child: _buildBottomNavItem(items[1], selected: false)),
+                    Expanded(child: _buildBottomNavItem(items[2], selected: false)),
+                    const SizedBox(width: 74),
+                    Expanded(child: _buildBottomNavItem(items[3], selected: false)),
+                    Expanded(child: _buildBottomNavItem(items[4], selected: true)),
+                    Expanded(child: _buildBottomNavItem(items[5], selected: false)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -2168,33 +2066,26 @@ class _ProducerCoinsViewState extends State<ProducerCoinsView> {
   }
 
   Widget _buildBottomNavItem(_BottomNavData item, {required bool selected}) {
+    final color = selected ? _primary : _softText;
+    final icon = selected ? item.activeIcon : item.icon;
+
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       onTap: () => _onBottomNavigationTap(item.index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? _primary.withOpacity(0.14) : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
+      child: SizedBox(
+        height: double.infinity,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              item.icon,
-              size: 22,
-              color: selected ? _primaryDark : _softText,
-            ),
+            Icon(icon, size: 24, color: color),
             const SizedBox(height: 4),
             Text(
               item.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: selected ? _primaryDark : _softText,
-                fontSize: 11.3,
+                color: color,
+                fontSize: 11.2,
                 fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
               ),
             ),
@@ -2309,11 +2200,13 @@ class _StatusMiniData {
 
 class _BottomNavData {
   final IconData icon;
+  final IconData activeIcon;
   final String label;
   final int index;
 
   const _BottomNavData({
     required this.icon,
+    required this.activeIcon,
     required this.label,
     required this.index,
   });

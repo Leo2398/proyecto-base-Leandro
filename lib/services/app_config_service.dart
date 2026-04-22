@@ -1,7 +1,7 @@
 import '../core/db_connection.dart';
 
 /// Servicio para configuraciones globales de la app (valor moneda, QR, etc.)
-/// Usa la tabla AppConfig con clave-valor
+/// Usa la tabla appconfig con clave-valor
 class AppConfigService {
   final DBConnection _db = DBConnection.instance;
 
@@ -9,16 +9,16 @@ class AppConfigService {
   Future<void> initTable() async {
     try {
       final conn = await _db.getConnection();
+
       // Verificar si la tabla existe con el esquema correcto
       try {
-        await conn.execute(
-            'SELECT configKey FROM AppConfig LIMIT 1');
+        await conn.execute('SELECT configKey FROM appconfig LIMIT 1');
         // Si llega aquí, el esquema es correcto
       } catch (_) {
         // La tabla no existe o tiene columnas distintas → recrear
-        await conn.execute('DROP TABLE IF EXISTS AppConfig');
+        await conn.execute('DROP TABLE IF EXISTS appconfig');
         await conn.execute('''
-          CREATE TABLE AppConfig (
+          CREATE TABLE appconfig (
             configKey VARCHAR(100) PRIMARY KEY,
             configValue TEXT,
             updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -34,7 +34,7 @@ class AppConfigService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
-        'SELECT configValue FROM AppConfig WHERE configKey = :key',
+        'SELECT configValue FROM appconfig WHERE configKey = :key',
         {'key': key},
       );
       if (result.rows.isEmpty) return null;
@@ -50,7 +50,7 @@ class AppConfigService {
       final conn = await _db.getConnection();
       await conn.execute(
         '''
-        INSERT INTO AppConfig (configKey, configValue)
+        INSERT INTO appconfig (configKey, configValue)
         VALUES (:key, :val)
         ON DUPLICATE KEY UPDATE configValue = VALUES(configValue)
         ''',
@@ -73,6 +73,5 @@ class AppConfigService {
 
   Future<String?> getQrImageUrl() => getConfig('qr_image_url');
 
-  Future<bool> setQrImageUrl(String url) =>
-      setConfig('qr_image_url', url);
+  Future<bool> setQrImageUrl(String url) => setConfig('qr_image_url', url);
 }

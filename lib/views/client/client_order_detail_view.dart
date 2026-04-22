@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../controllers/order_controller.dart';
+import '../../controllers/review_controller.dart';
 import '../../controllers/user_controller.dart';
 import '../../core/image_helper.dart';
 import '../../models/delivery_mode_model.dart';
 import '../../models/order_detail_model.dart';
 import '../../models/order_model.dart';
 import '../../models/product_model.dart';
+import '../../models/review_model.dart';
 import '../../models/user_model.dart';
 import '../../services/delivery_mode_service.dart';
 import '../../services/product_service.dart';
@@ -33,9 +35,14 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
   final DeliveryModeService _deliveryModeService = DeliveryModeService();
 
   bool _isBootstrapping = true;
+  bool _isCheckingReview = false;
+  bool _isSubmittingReview = false;
+  bool _hasReview = false;
+  bool _reviewCheckDone = false;
   String? _localError;
 
   UserModel? _producer;
+  ReviewModel? _existingReview;
   Map<int, ProductModel> _productsById = {};
   Map<int, DeliveryModeModel> _deliveryModesById = {};
 
@@ -76,6 +83,9 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
       futures.add(_loadDeliveryModes());
 
       await Future.wait(futures);
+
+      final refreshedOrder = _resolveCurrentOrder(orderCtrl);
+      await _loadReviewStatus(refreshedOrder);
     } catch (e) {
       _localError = 'Ocurrió un error al cargar el pedido: $e';
     } finally {
@@ -131,6 +141,49 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
     }
   }
 
+  Future<void> _loadReviewStatus(OrderModel order) async {
+    final orderId = order.id ?? 0;
+    if (orderId <= 0) {
+      if (!mounted) return;
+      setState(() {
+        _isCheckingReview = false;
+        _hasReview = false;
+        _existingReview = null;
+        _reviewCheckDone = true;
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isCheckingReview = true;
+    });
+
+    try {
+      final reviewCtrl = context.read<ReviewController>();
+      final review = await reviewCtrl.loadReviewByOrderId(orderId);
+
+      if (!mounted) return;
+      setState(() {
+        _existingReview = review;
+        _hasReview = review != null;
+        _reviewCheckDone = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _existingReview = null;
+        _hasReview = false;
+        _reviewCheckDone = true;
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isCheckingReview = false;
+      });
+    }
+  }
+
   OrderModel _resolveCurrentOrder(OrderController orderCtrl) {
     final currentId = widget.order.id;
     if (currentId == null) return widget.order;
@@ -142,13 +195,91 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
     }
   }
 
+  bool _canReviewOrder(OrderModel order, UserModel? currentUser) {
+    if (currentUser?.id == null || currentUser!.id! <= 0) return false;
+    if ((order.id ?? 0) <= 0) return false;
+    if (order.clientID != currentUser.id) return false;
+    if (order.state != OrderController.stateCompleted) return false;
+    if (_hasReview) return false;
+    if (_isSubmittingReview) return false;
+    return true;
+  }
+
+  Future<void> _showReviewDialog(OrderModel order, UserModel currentUser) async {
+    if ((order.id ?? 0) <= 0 || currentUser.id == null || currentUser.id! <= 0) {
+      return;
+    }
+
+    final draft = await showDialog<_ReviewDraft>(
+      context: context,
+      builder: (dialogContext) => const _ReviewDialog(),
+    );
+
+    if (!mounted || draft == null) return;
+
+    setState(() {
+      _isSubmittingReview = true;
+    });
+
+    try {
+      final reviewCtrl = context.read<ReviewController>();
+
+      final review = await reviewCtrl.createReview(
+        orderId: order.id!,
+        userId: currentUser.id!,
+        value: draft.stars,
+        comment: draft.comment,
+      );
+
+      if (!mounted) return;
+
+      if (review != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Calificación enviada correctamente.'),
+            backgroundColor: Color(0xFF3D7A3D),
+          ),
+        );
+
+        await _loadReviewStatus(order);
+
+        if (!mounted) return;
+        setState(() {});
+      } else {
+        final message = reviewCtrl.errorMessage?.trim().isNotEmpty == true
+            ? reviewCtrl.errorMessage!
+            : 'No se pudo guardar la calificación.';
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: const Color(0xFFC24D4D),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ocurrió un error al guardar la calificación: $e'),
+          backgroundColor: const Color(0xFFC24D4D),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isSubmittingReview = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F0E8),
       body: SafeArea(
-        child: Consumer2<OrderController, UserController>(
-          builder: (context, orderCtrl, userCtrl, _) {
+        child: Consumer3<OrderController, UserController, ReviewController>(
+          builder: (context, orderCtrl, userCtrl, reviewCtrl, _) {
             final order = _resolveCurrentOrder(orderCtrl);
             final details = orderCtrl.orderDetails;
             final status = _statusFor(order.state);
@@ -156,6 +287,8 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
             final computedSubtotal = _computeSubtotal(details);
             final deliveryModeLabel = _deliveryModeLabel(_producer);
             final deliveryIcon = _deliveryModeIcon(deliveryModeLabel);
+            final currentUser = userCtrl.currentUser;
+            final canReview = _canReviewOrder(order, currentUser);
 
             return RefreshIndicator(
               color: const Color(0xFF5A8A5A),
@@ -173,6 +306,10 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
                         if (orderCtrl.errorMessage != null &&
                             orderCtrl.errorMessage!.trim().isNotEmpty)
                           _buildErrorBanner(orderCtrl.errorMessage!),
+                        if (reviewCtrl.errorMessage != null &&
+                            reviewCtrl.errorMessage!.trim().isNotEmpty &&
+                            !_isBootstrapping)
+                          _buildErrorBanner(reviewCtrl.errorMessage!),
                       ],
                     ),
                   ),
@@ -275,6 +412,30 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
                             child: _NotesCard(notes: order.notes),
                           ),
                           const SizedBox(height: 14),
+                          if (order.state == OrderController.stateCompleted)
+                            Column(
+                              children: [
+                                _SectionCard(
+                                  title: 'Tu calificación',
+                                  subtitle: _hasReview
+                                      ? 'Esta es la calificación que registraste para este pedido.'
+                                      : 'Cuando completes tu experiencia, puedes compartir tu opinión aquí.',
+                                  icon: Icons.star_rounded,
+                                  child: _ReviewSection(
+                                    isCheckingReview: _isCheckingReview,
+                                    reviewCheckDone: _reviewCheckDone,
+                                    hasReview: _hasReview,
+                                    existingReview: _existingReview,
+                                    canReview: canReview,
+                                    isSubmitting: _isSubmittingReview,
+                                    onTapReview: canReview && currentUser != null
+                                        ? () => _showReviewDialog(order, currentUser)
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                              ],
+                            ),
                           _SectionCard(
                             title: 'Detalle de productos',
                             subtitle:
@@ -295,8 +456,7 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
                               children: [
                                 _SummaryRow(
                                   label: 'Subtotal calculado',
-                                  value:
-                                  '${_formatMoney(computedSubtotal)} monedas',
+                                  value: '${_formatMoney(computedSubtotal)} monedas',
                                 ),
                                 const SizedBox(height: 10),
                                 _SummaryRow(
@@ -330,9 +490,7 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
                                       Expanded(
                                         child: Text(
                                           computedSubtotal > 0 &&
-                                              (computedSubtotal - order.amount)
-                                                  .abs() >
-                                                  0.01
+                                              (computedSubtotal - order.amount).abs() > 0.01
                                               ? 'El total calculado puede diferir del monto guardado si el pedido fue registrado con datos anteriores o ajustes pendientes.'
                                               : 'El resumen coincide correctamente con la información principal disponible del pedido.',
                                           style: const TextStyle(
@@ -354,6 +512,12 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
                             onRefresh: _loadData,
                             orderId: order.id,
                             stateLabel: status.label,
+                            canReview: canReview,
+                            isCheckingReview: _isCheckingReview,
+                            isSubmittingReview: _isSubmittingReview,
+                            onReview: canReview && currentUser != null
+                                ? () => _showReviewDialog(order, currentUser)
+                                : null,
                           ),
                         ]),
                       ),
@@ -657,6 +821,172 @@ class _ClientOrderDetailViewState extends State<ClientOrderDetailView> {
       return Icons.compare_arrows_rounded;
     }
     return Icons.local_shipping_outlined;
+  }
+}
+
+class _ReviewDraft {
+  final int stars;
+  final String? comment;
+
+  const _ReviewDraft({
+    required this.stars,
+    this.comment,
+  });
+}
+
+class _ReviewDialog extends StatefulWidget {
+  const _ReviewDialog();
+
+  @override
+  State<_ReviewDialog> createState() => _ReviewDialogState();
+}
+
+class _ReviewDialogState extends State<_ReviewDialog> {
+  int selectedStars = 5;
+  final TextEditingController commentController = TextEditingController();
+
+  @override
+  void dispose() {
+    commentController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(
+      _ReviewDraft(
+        stars: selectedStars,
+        comment: commentController.text.trim().isEmpty
+            ? null
+            : commentController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFFFDFBF7),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+      contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
+      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      title: const Text(
+        'Calificar pedido',
+        style: TextStyle(
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF2D2D2D),
+        ),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '¿Cómo fue tu experiencia?',
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF2D2D2D),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: Wrap(
+                spacing: 6,
+                children: List.generate(5, (index) {
+                  final star = index + 1;
+                  final isActive = star <= selectedStars;
+
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () {
+                      setState(() {
+                        selectedStars = star;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        isActive ? Icons.star_rounded : Icons.star_border_rounded,
+                        size: 38,
+                        color: isActive
+                            ? const Color(0xFFE2A73B)
+                            : const Color(0xFFB9B2A8),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Center(
+              child: Text(
+                _reviewLabelForValue(selectedStars),
+                style: const TextStyle(
+                  fontSize: 12.8,
+                  color: Color(0xFF7A736B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: commentController,
+              maxLines: 4,
+              maxLength: 300,
+              decoration: InputDecoration(
+                labelText: 'Comentario (opcional)',
+                hintText: 'Cuéntanos cómo estuvo tu pedido',
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.all(14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Color(0xFFE7DED2)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Color(0xFFE7DED2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: Color(0xFF5A8A5A), width: 1.4),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text(
+            'Cancelar',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        ElevatedButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.star_rounded),
+          label: const Text(
+            'Enviar calificación',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF5A8A5A),
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1064,6 +1394,259 @@ class _NotesCard extends StatelessWidget {
   }
 }
 
+class _ReviewSection extends StatelessWidget {
+  final bool isCheckingReview;
+  final bool reviewCheckDone;
+  final bool hasReview;
+  final ReviewModel? existingReview;
+  final bool canReview;
+  final bool isSubmitting;
+  final VoidCallback? onTapReview;
+
+  const _ReviewSection({
+    required this.isCheckingReview,
+    required this.reviewCheckDone,
+    required this.hasReview,
+    required this.existingReview,
+    required this.canReview,
+    required this.isSubmitting,
+    required this.onTapReview,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isCheckingReview && !reviewCheckDone) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F5EF),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Color(0xFF5A8A5A),
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Estamos verificando si este pedido ya fue calificado.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF5C544B),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (hasReview && existingReview != null) {
+      final comment = (existingReview!.comment ?? '').trim();
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFAF0),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFF0DCA5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                ...List.generate(5, (index) {
+                  final active = index < existingReview!.value;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 2),
+                    child: Icon(
+                      active ? Icons.star_rounded : Icons.star_border_rounded,
+                      color: const Color(0xFFE2A73B),
+                      size: 22,
+                    ),
+                  );
+                }),
+                const SizedBox(width: 8),
+                Text(
+                  '${existingReview!.value}/5',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFF8A5A00),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _reviewLabelForValue(existingReview!.value),
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: Color(0xFF7A736B),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (comment.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  comment,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF2D2D2D),
+                    height: 1.45,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    if (isSubmitting) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF4EA),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFCBE1CB)),
+        ),
+        child: const Row(
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Color(0xFF5A8A5A),
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Guardando tu calificación...',
+                style: TextStyle(
+                  fontSize: 12.8,
+                  color: Color(0xFF3D7A3D),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (canReview) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEAF4EA),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFCBE1CB)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.rate_review_outlined,
+                  color: Color(0xFF3D7A3D),
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Tu pedido ya está completado. Ahora puedes dejar una calificación para compartir tu experiencia.',
+                    style: TextStyle(
+                      fontSize: 12.8,
+                      color: Color(0xFF3D7A3D),
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onTapReview,
+                icon: const Icon(Icons.star_rounded),
+                label: const Text(
+                  'Calificar pedido',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF5A8A5A),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F5EF),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xFF7A736B),
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'La calificación solo estará disponible cuando el pedido esté completado y todavía no tenga una review registrada.',
+              style: TextStyle(
+                fontSize: 12.8,
+                color: Color(0xFF5C544B),
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProductDetailCard extends StatelessWidget {
   final OrderDetailModel detail;
   final ProductModel? product;
@@ -1237,11 +1820,19 @@ class _BottomActionCard extends StatelessWidget {
   final Future<void> Function() onRefresh;
   final int? orderId;
   final String stateLabel;
+  final bool canReview;
+  final bool isCheckingReview;
+  final bool isSubmittingReview;
+  final VoidCallback? onReview;
 
   const _BottomActionCard({
     required this.onRefresh,
     required this.orderId,
     required this.stateLabel,
+    this.canReview = false,
+    this.isCheckingReview = false,
+    this.isSubmittingReview = false,
+    this.onReview,
   });
 
   @override
@@ -1300,6 +1891,34 @@ class _BottomActionCard extends StatelessWidget {
               ),
             ),
           ),
+          if (canReview) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: (isCheckingReview || isSubmittingReview) ? null : onReview,
+                icon: (isCheckingReview || isSubmittingReview)
+                    ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Icon(Icons.star_rounded),
+                label: Text(
+                  isSubmittingReview ? 'Guardando calificación...' : 'Calificar pedido',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF5A8A5A),
+                  side: const BorderSide(color: Color(0xFF5A8A5A)),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1814,4 +2433,21 @@ String _safeAddress(String? address) {
     return 'Dirección no disponible por ahora';
   }
   return text;
+}
+
+String _reviewLabelForValue(int value) {
+  switch (value) {
+    case 1:
+      return 'Muy mala';
+    case 2:
+      return 'Regular';
+    case 3:
+      return 'Buena';
+    case 4:
+      return 'Muy buena';
+    case 5:
+      return 'Excelente';
+    default:
+      return 'Calificación';
+  }
 }

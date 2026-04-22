@@ -44,7 +44,7 @@ class NotificationService {
           Type,
           IsRead,
           CreatedAt
-        FROM `Notification`
+        FROM notification
         WHERE UserID = :userId
         ORDER BY CreatedAt DESC, ID DESC
         LIMIT $safeLimit
@@ -79,7 +79,7 @@ class NotificationService {
           Type,
           IsRead,
           CreatedAt
-        FROM `Notification`
+        FROM notification
         WHERE UserID = :userId
           AND IsRead = 0
         ORDER BY CreatedAt DESC, ID DESC
@@ -114,7 +114,7 @@ class NotificationService {
           Type,
           IsRead,
           CreatedAt
-        FROM `Notification`
+        FROM notification
         WHERE UserID = :userId
           AND ID > :lastNotificationId
         ORDER BY ID DESC
@@ -146,7 +146,7 @@ class NotificationService {
           Type,
           IsRead,
           CreatedAt
-        FROM `Notification`
+        FROM notification
         WHERE ID = :notificationId
         LIMIT 1
         ''',
@@ -173,7 +173,7 @@ class NotificationService {
       final result = await conn.execute(
         '''
         SELECT COUNT(*) AS Total
-        FROM `Notification`
+        FROM notification
         WHERE UserID = :userId
           AND IsRead = 0
         ''',
@@ -201,7 +201,7 @@ class NotificationService {
       final result = await conn.execute(
         '''
         SELECT ID
-        FROM `Notification`
+        FROM notification
         WHERE UserID = :userId
         ORDER BY ID DESC
         LIMIT 1
@@ -257,7 +257,7 @@ class NotificationService {
 
       await conn.execute(
         '''
-        INSERT INTO `Notification` (
+        INSERT INTO notification (
           UserID,
           Title,
           Message,
@@ -317,7 +317,7 @@ class NotificationService {
 
       final result = await conn.execute(
         '''
-        UPDATE `Notification`
+        UPDATE notification
         SET IsRead = 1
         WHERE ID = :notificationId
         ''',
@@ -339,7 +339,7 @@ class NotificationService {
 
       final result = await conn.execute(
         '''
-        UPDATE `Notification`
+        UPDATE notification
         SET IsRead = 0
         WHERE ID = :notificationId
         ''',
@@ -361,7 +361,7 @@ class NotificationService {
 
       await conn.execute(
         '''
-        UPDATE `Notification`
+        UPDATE notification
         SET IsRead = 1
         WHERE UserID = :userId
           AND IsRead = 0
@@ -384,7 +384,7 @@ class NotificationService {
 
       final result = await conn.execute(
         '''
-        DELETE FROM `Notification`
+        DELETE FROM notification
         WHERE ID = :notificationId
         ''',
         {
@@ -405,7 +405,7 @@ class NotificationService {
 
       await conn.execute(
         '''
-        DELETE FROM `Notification`
+        DELETE FROM notification
         WHERE UserID = :userId
         ''',
         {

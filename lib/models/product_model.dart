@@ -9,6 +9,7 @@ class ProductModel {
   final int state;
   final DateTime? harvestDate;
   final int userID;
+  final int? familyID;
 
   const ProductModel({
     this.id,
@@ -21,6 +22,7 @@ class ProductModel {
     required this.state,
     this.harvestDate,
     required this.userID,
+    this.familyID,
   });
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
@@ -35,6 +37,9 @@ class ProductModel {
       state: _toInt(map['state']) ?? 1,
       harvestDate: _toDateTime(map['HarvestDate']),
       userID: _toInt(map['UserID']) ?? 0,
+      familyID: _toInt(
+        map['familyID'] ?? map['FamilyID'] ?? map['productFamilyID'],
+      ),
     );
   }
 
@@ -50,6 +55,7 @@ class ProductModel {
       'state': state,
       'HarvestDate': harvestDate,
       'UserID': userID,
+      'familyID': familyID,
     };
   }
 
@@ -64,18 +70,26 @@ class ProductModel {
     int? state,
     DateTime? harvestDate,
     int? userID,
+    int? familyID,
+    bool clearPicture = false,
+    bool clearDescription = false,
+    bool clearUnit = false,
+    bool clearHarvestDate = false,
+    bool clearFamilyID = false,
   }) {
     return ProductModel(
       id: id ?? this.id,
       name: name ?? this.name,
-      picture: picture ?? this.picture,
-      description: description ?? this.description,
+      picture: clearPicture ? null : (picture ?? this.picture),
+      description: clearDescription ? null : (description ?? this.description),
       price: price ?? this.price,
-      unit: unit ?? this.unit,
+      unit: clearUnit ? null : (unit ?? this.unit),
       stock: stock ?? this.stock,
       state: state ?? this.state,
-      harvestDate: harvestDate ?? this.harvestDate,
+      harvestDate:
+      clearHarvestDate ? null : (harvestDate ?? this.harvestDate),
       userID: userID ?? this.userID,
+      familyID: clearFamilyID ? null : (familyID ?? this.familyID),
     );
   }
 

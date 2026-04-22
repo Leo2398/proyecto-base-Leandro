@@ -5,9 +5,9 @@ import 'interfaces/i_coin_movement_service.dart';
 /// Servicio de monedas adaptado 100% a la base de datos actual.
 ///
 /// RESPETA LA BD EXISTENTE:
-/// - saldo actual -> tabla User.balance
-/// - solicitudes / historial de recarga -> tabla Request
-/// - uso de monedas -> descuento directo en User.balance
+/// - saldo actual -> tabla user.balance
+/// - solicitudes / historial de recarga -> tabla request
+/// - uso de monedas -> descuento directo en user.balance
 ///
 /// IMPORTANTE:
 /// Con la BD actual no existe una tabla separada para guardar el historial
@@ -32,7 +32,7 @@ class CoinMovementService implements ICoinMovementService {
       final result = await conn.execute(
         '''
         SELECT balance
-        FROM User
+        FROM user
         WHERE ID = :userId
         LIMIT 1
         ''',
@@ -51,7 +51,7 @@ class CoinMovementService implements ICoinMovementService {
   /// Obtiene el historial de solicitudes de recarga del usuario/productor
   ///
   /// Como la BD actual no tiene una tabla de historial de consumo,
-  /// este historial se construye desde la tabla Request.
+  /// este historial se construye desde la tabla request.
   @override
   Future<List<CoinMovementModel>> getMovementsByUserId(int userId) async {
     try {
@@ -70,7 +70,7 @@ class CoinMovementService implements ICoinMovementService {
           processedDate,
           userID,
           adminID
-        FROM Request
+        FROM request
         WHERE userID = :userId
         ORDER BY registerDate DESC, ID DESC
         ''',
@@ -110,7 +110,7 @@ class CoinMovementService implements ICoinMovementService {
           processedDate,
           userID,
           adminID
-        FROM Request
+        FROM request
         WHERE userID = :userId
         ORDER BY registerDate DESC, ID DESC
         LIMIT $safeLimit
@@ -129,7 +129,7 @@ class CoinMovementService implements ICoinMovementService {
 
   /// Crea un "movimiento" según el tipo recibido.
   ///
-  /// - Si es recarga -> crea una solicitud en Request
+  /// - Si es recarga -> crea una solicitud en request
   /// - Si es uso -> descuenta balance directamente
   ///
   /// Esto se adapta a la BD actual sin crear tablas nuevas.
@@ -165,8 +165,8 @@ class CoinMovementService implements ICoinMovementService {
   ///
   /// OJO:
   /// En esta BD, la recarga NO suma saldo inmediatamente.
-  /// Primero crea una solicitud pendiente en Request y luego el admin
-  /// deberá aprobarla para reflejar el saldo en User.balance.
+  /// Primero crea una solicitud pendiente en request y luego el admin
+  /// deberá aprobarla para reflejar el saldo en user.balance.
   ///
   /// Como la interfaz actual no recibe imagen/comprobante,
   /// este método guarda image = ''.
@@ -182,7 +182,7 @@ class CoinMovementService implements ICoinMovementService {
       if (userId <= 0) return false;
       if (amount <= 0) return false;
 
-      /// En Request.value se guardan monedas enteras
+      /// En request.value se guardan monedas enteras
       if (!_isWholeNumber(amount)) return false;
 
       final conn = await _db.getConnection();
@@ -191,7 +191,7 @@ class CoinMovementService implements ICoinMovementService {
 
       final result = await conn.execute(
         '''
-        INSERT INTO Request (
+        INSERT INTO request (
           value,
           amount,
           image,
@@ -230,7 +230,7 @@ class CoinMovementService implements ICoinMovementService {
   ///
   /// IMPORTANTE:
   /// Como la BD actual no tiene tabla para guardar el historial
-  /// de consumo, aquí solo se actualiza User.balance.
+  /// de consumo, aquí solo se actualiza user.balance.
   @override
   Future<bool> registerUsage({
     required int userId,
@@ -245,7 +245,7 @@ class CoinMovementService implements ICoinMovementService {
 
       final result = await conn.execute(
         '''
-        UPDATE User
+        UPDATE user
         SET balance = balance - :amount
         WHERE ID = :userId
           AND balance >= :amount
@@ -262,7 +262,7 @@ class CoinMovementService implements ICoinMovementService {
     }
   }
 
-  /// Convierte una fila de Request en CoinMovementModel
+  /// Convierte una fila de request en CoinMovementModel
   ///
   /// Se usa CoinMovementModel solo como modelo visual/funcional
   /// para la pantalla de saldo e historial.
@@ -308,7 +308,7 @@ class CoinMovementService implements ICoinMovementService {
         '- Estado: $stateText$processedText';
   }
 
-  /// Devuelve la etiqueta del estado de Request
+  /// Devuelve la etiqueta del estado de request
   String _requestStateLabel(int state) {
     switch (state) {
       case 0:
@@ -322,7 +322,7 @@ class CoinMovementService implements ICoinMovementService {
     }
   }
 
-  /// Verifica si el valor es entero, porque Request.value es INT
+  /// Verifica si el valor es entero, porque request.value es INT
   bool _isWholeNumber(double value) {
     return value == value.toInt().toDouble();
   }
