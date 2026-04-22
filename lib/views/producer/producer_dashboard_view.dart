@@ -96,7 +96,7 @@ class _ProducerDashboardViewState extends State<ProducerDashboardView> {
 
     await notificationController.startPolling(
       userId: currentUser.id!,
-      interval: const Duration(seconds: 8),
+      interval: const Duration(seconds: 3),
       loadImmediately: true,
     );
   }

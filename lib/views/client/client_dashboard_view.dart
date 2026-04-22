@@ -54,7 +54,7 @@ class _ClientDashboardViewState extends State<ClientDashboardView> {
 
     await notificationCtrl.startPolling(
       userId: currentUser.id!,
-      interval: const Duration(seconds: 8),
+      interval: const Duration(seconds: 3),
       loadImmediately: false,
     );
   }
