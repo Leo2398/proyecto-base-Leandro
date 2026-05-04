@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
@@ -74,28 +75,28 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
     try {
       final bytes = await _pdfFuture;
 
-      final filename =
-          '${_safeFileName(widget.title)}_${DateTime.now().millisecondsSinceEpoch}.pdf';
-
-      if (!mounted) return;
+      final fileName =
+          '${_safeFileName(widget.title)}_${DateTime.now().millisecondsSinceEpoch}';
 
       if (Platform.isAndroid || Platform.isIOS) {
-        await Printing.sharePdf(
+        await FileSaver.instance.saveFile(
+          name: fileName,
           bytes: bytes,
-          filename: filename,
+          ext: 'pdf',
+          mimeType: MimeType.pdf,
         );
 
         if (!mounted) return;
 
         _showSnack(
-          'PDF listo para guardar o compartir',
+          'PDF descargado correctamente',
           type: _PreviewSnackType.success,
         );
       } else {
         final dir =
             await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
 
-        final file = File('${dir.path}/$filename');
+        final file = File('${dir.path}/$fileName.pdf');
         await file.writeAsBytes(bytes);
 
         if (!mounted) return;
@@ -109,11 +110,11 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
       if (!mounted) return;
 
       _showSnack(
-        'No se pudo guardar el PDF. Intenta actualizar la vista previa.',
+        'No se pudo descargar el PDF. Intenta actualizar la vista previa.',
         type: _PreviewSnackType.error,
       );
 
-      debugPrint('Error al guardar PDF: $e');
+      debugPrint('Error al descargar PDF: $e');
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -300,7 +301,7 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
                       Expanded(
                         child: _infoChip(
                           icon: Icons.save_alt_rounded,
-                          label: 'PDF',
+                          label: 'Guardar',
                         ),
                       ),
                     ],
@@ -319,7 +320,7 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
                             size: 20,
                           ),
                           label: const Text(
-                            'Descargar / Compartir',
+                            'Descargar PDF',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -329,9 +330,11 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.white.withOpacity(0.65),
+                            disabledBackgroundColor:
+                            Colors.white.withOpacity(0.65),
                             foregroundColor: _primaryDark,
-                            disabledForegroundColor: _primaryDark.withOpacity(0.5),
+                            disabledForegroundColor:
+                            _primaryDark.withOpacity(0.5),
                             elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(15),
@@ -420,7 +423,7 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        'Previsualiza el archivo antes de guardarlo',
+                        'Previsualiza el archivo antes de descargarlo',
                         style: TextStyle(
                           color: _textSecondary,
                           fontSize: 11.5,
@@ -565,7 +568,7 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
               ),
               SizedBox(width: 13),
               Text(
-                'Preparando PDF...',
+                'Descargando PDF...',
                 style: TextStyle(
                   color: _textPrimary,
                   fontWeight: FontWeight.w900,
