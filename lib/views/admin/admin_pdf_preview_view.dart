@@ -79,7 +79,7 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
           '${_safeFileName(widget.title)}_${DateTime.now().millisecondsSinceEpoch}';
 
       if (Platform.isAndroid || Platform.isIOS) {
-        await FileSaver.instance.saveFile(
+        await FileSaver.instance.saveAs(
           name: fileName,
           bytes: bytes,
           ext: 'pdf',
@@ -89,7 +89,7 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
         if (!mounted) return;
 
         _showSnack(
-          'PDF descargado correctamente',
+          'PDF guardado correctamente',
           type: _PreviewSnackType.success,
         );
       } else {
@@ -110,11 +110,11 @@ class _AdminPdfPreviewViewState extends State<AdminPdfPreviewView> {
       if (!mounted) return;
 
       _showSnack(
-        'No se pudo descargar el PDF. Intenta actualizar la vista previa.',
+        'No se pudo guardar el PDF',
         type: _PreviewSnackType.error,
       );
 
-      debugPrint('Error al descargar PDF: $e');
+      debugPrint('Error al guardar PDF: $e');
     } finally {
       if (mounted) {
         setState(() => _saving = false);
