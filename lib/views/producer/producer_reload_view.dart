@@ -49,7 +49,14 @@ class _ProducerReloadViewState extends State<ProducerReloadView> {
         child: Consumer2<RequestController, UserController>(
           builder: (context, requestController, userController, _) {
             final config = requestController.config;
-            final bsPerCoin = config.bsPerCoin <= 0 ? 100.0 : config.bsPerCoin;
+
+            /// Usa el mismo valor que el cliente.
+            /// Si en algún caso raro la BD entrega 0 o negativo, cae al
+            /// default del modelo (AppConfigModel.defaults = 9 Bs).
+            final bsPerCoin = config.bsPerCoin > 0
+                ? config.bsPerCoin
+                : 9.0;
+
             final balance =
                 userController.currentUser?.balance.toStringAsFixed(0) ?? '0';
 
