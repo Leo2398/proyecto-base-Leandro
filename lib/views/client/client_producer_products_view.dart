@@ -141,14 +141,28 @@ class _ClientProducerProductsViewState
     return const Color(0xFF5A8A5A);
   }
 
-  // Reemplaza SOLO el método _addToCart en client_producer_products_view.dart
-
   void _addToCart(ProductModel product) {
     final cart = context.read<CartController>();
+    final messenger = ScaffoldMessenger.of(context);
 
-    // Verifica si el producto es de otra empresa
-    if (!cart.canAddFromProducer(widget.producer.name)) {
-      // Muestra el aviso de empresa diferente
+    final int producerID =
+    product.userID > 0 ? product.userID : (widget.producer.id ?? 0);
+
+    if (producerID <= 0) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No se encontró un productor válido para este producto.'),
+          backgroundColor: Color(0xFFD96C2F),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (!cart.canAddFromProducer(
+      producerID: producerID,
+      producerName: widget.producer.name,
+    )) {
       showModalBottomSheet(
         context: context,
         backgroundColor: Colors.white,
@@ -161,7 +175,8 @@ class _ClientProducerProductsViewState
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                   color: const Color(0xFFE0D8CE),
                   borderRadius: BorderRadius.circular(4),
@@ -169,7 +184,8 @@ class _ClientProducerProductsViewState
               ),
               const SizedBox(height: 20),
               Container(
-                width: 64, height: 64,
+                width: 64,
+                height: 64,
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF0EC),
                   borderRadius: BorderRadius.circular(20),
@@ -184,17 +200,20 @@ class _ClientProducerProductsViewState
               const Text(
                 'Solo una empresa por pedido',
                 style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
                   color: Color(0xFF2D2D2D),
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 'Tu carrito ya tiene productos de "${cart.currentProducerName}". '
-                'Vacía el carrito para agregar productos de otra empresa.',
+                    'Vacía el carrito para agregar productos de otra empresa.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  fontSize: 14, color: Color(0xFF888888), height: 1.4,
+                  fontSize: 14,
+                  color: Color(0xFF888888),
+                  height: 1.4,
                 ),
               ),
               const SizedBox(height: 20),
@@ -207,11 +226,14 @@ class _ClientProducerProductsViewState
                         foregroundColor: const Color(0xFF5A8A5A),
                         side: const BorderSide(color: Color(0xFF5A8A5A)),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: const Text('Cancelar',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      child: const Text(
+                        'Cancelar',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -220,18 +242,20 @@ class _ClientProducerProductsViewState
                       onPressed: () {
                         cart.clearCart();
                         Navigator.pop(context);
-                        // Reintenta agregar después de limpiar
+
                         cart.addFromProduct(
                           product,
                           producerName: widget.producer.name,
                         );
-                        ScaffoldMessenger.of(context).showSnackBar(
+
+                        messenger.showSnackBar(
                           SnackBar(
                             content: Text('"${product.name}" agregado al carrito'),
                             backgroundColor: const Color(0xFF5A8A5A),
                             behavior: SnackBarBehavior.floating,
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
                             duration: const Duration(seconds: 2),
                           ),
                         );
@@ -241,11 +265,14 @@ class _ClientProducerProductsViewState
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: const Text('Vaciar y agregar',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
+                      child: const Text(
+                        'Vaciar y agregar',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                 ],
@@ -257,14 +284,19 @@ class _ClientProducerProductsViewState
       return;
     }
 
-    // Agrega normalmente
-    cart.addFromProduct(product, producerName: widget.producer.name);
-    ScaffoldMessenger.of(context).showSnackBar(
+    cart.addFromProduct(
+      product,
+      producerName: widget.producer.name,
+    );
+
+    messenger.showSnackBar(
       SnackBar(
         content: Text('"${product.name}" agregado al carrito'),
         backgroundColor: const Color(0xFF5A8A5A),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -692,16 +724,16 @@ class _ClientProducerProductsViewState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 AppImage(
-  src: product.picture,
-  width: 92,
-  height: 92,
-  borderRadius: 20,
-  placeholder: const Icon(
-    Icons.eco_outlined,
-    color: Color(0xFF5A8A5A),
-    size: 34,
-  ),
-),
+                  src: product.picture,
+                  width: 92,
+                  height: 92,
+                  borderRadius: 20,
+                  placeholder: const Icon(
+                    Icons.eco_outlined,
+                    color: Color(0xFF5A8A5A),
+                    size: 34,
+                  ),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -799,8 +831,9 @@ class _ClientProducerProductsViewState
                 Expanded(
                   child: Consumer<CartController>(
                     builder: (_, cart, __) {
-                      final inCart = cart.items.any(
-                          (i) => i.productId == (product.id ?? -1));
+                      final inCart =
+                      cart.items.any((i) => i.productId == (product.id ?? -1));
+
                       return OutlinedButton.icon(
                         onPressed: product.stock == 0
                             ? null
@@ -811,19 +844,17 @@ class _ClientProducerProductsViewState
                               : Icons.shopping_cart_outlined,
                           size: 18,
                         ),
-                        label: Text(inCart
-                            ? 'En carrito'
-                            : 'Agregar al carrito'),
+                        label: Text(
+                          inCart ? 'En carrito' : 'Agregar al carrito',
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: const Color(0xFF5A8A5A),
-                          side: const BorderSide(
-                              color: Color(0xFFD7E4D7)),
+                          side: const BorderSide(color: Color(0xFFD7E4D7)),
                           backgroundColor: const Color(0xFFF8FCF8),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 13),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
                         ),
                       );
                     },

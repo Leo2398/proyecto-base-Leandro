@@ -23,7 +23,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
-        'SELECT * FROM User WHERE ID = :id',
+        'SELECT * FROM user WHERE ID = :id',
         {'id': id},
       );
 
@@ -42,7 +42,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
-        'SELECT * FROM User WHERE email = :email',
+        'SELECT * FROM user WHERE email = :email',
         {'email': email},
       );
 
@@ -54,17 +54,18 @@ class UserService implements IUserService {
       return null;
     }
   }
+
   @override
   Future<List<UserModel>> getAllProducers() async {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
         '''
-      SELECT *
-      FROM User
-      WHERE role = 1 AND state = 1
-      ORDER BY name ASC
-      ''',
+        SELECT *
+        FROM user
+        WHERE role = 1 AND state = 1
+        ORDER BY name ASC
+        ''',
       );
 
       return result.rows
@@ -81,7 +82,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
-        'SELECT * FROM User WHERE role = :role ORDER BY name ASC',
+        'SELECT * FROM user WHERE role = :role ORDER BY name ASC',
         {'role': role},
       );
       return result.rows.map((r) => UserModel.fromMap(r.assoc())).toList();
@@ -94,11 +95,13 @@ class UserService implements IUserService {
   /// Registra un nuevo usuario en la BD
   /// Guarda Location, PickupLocation y User en orden
   @override
-  Future<bool> createUser(UserModel user,
-      {double? latitude,
-      double? longitude,
-      String? address,
-      int? deliveryModeID}) async {
+  Future<bool> createUser(
+      UserModel user, {
+        double? latitude,
+        double? longitude,
+        String? address,
+        int? deliveryModeID,
+      }) async {
     try {
       final conn = await _db.getConnection();
       int? pickUpLocationID;
@@ -134,12 +137,18 @@ class UserService implements IUserService {
       /// Cifra la contraseña antes de guardarla en la BD
       final hashedPassword = EncryptionHelper.hashPassword(tempPassword);
 
-      /// Paso 3: inserta en User
+      /// Paso 3: inserta en user
       await conn.execute(
-        '''INSERT INTO User (name, image, balance, email, password, 
-        description, role, cellphone, deliveryModeID, pickUpLocationID) 
-        VALUES (:name, :image, :balance, :email, :password, 
-        :description, :role, :cellphone, :deliveryModeID, :pickUpLocationID)''',
+        '''
+        INSERT INTO user (
+          name, image, balance, email, password,
+          description, role, cellphone, deliveryModeID, pickUpLocationID
+        )
+        VALUES (
+          :name, :image, :balance, :email, :password,
+          :description, :role, :cellphone, :deliveryModeID, :pickUpLocationID
+        )
+        ''',
         {
           'name': user.name,
           'image': user.image,
@@ -173,7 +182,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
-        'SELECT ID FROM User WHERE email = :email',
+        'SELECT ID FROM user WHERE email = :email',
         {'email': email},
       );
 
@@ -192,9 +201,14 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        '''UPDATE User SET name = :name, image = :image, 
-        description = :description, cellphone = :cellphone 
-        WHERE ID = :id''',
+        '''
+        UPDATE user SET
+          name = :name,
+          image = :image,
+          description = :description,
+          cellphone = :cellphone
+        WHERE ID = :id
+        ''',
         {
           'name': user.name,
           'image': user.image,
@@ -216,9 +230,14 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        '''UPDATE User SET name = :name, email = :email,
-        cellphone = :cellphone, image = :image
-        WHERE ID = :id''',
+        '''
+        UPDATE user SET
+          name = :name,
+          email = :email,
+          cellphone = :cellphone,
+          image = :image
+        WHERE ID = :id
+        ''',
         {
           'name': user.name,
           'email': user.email,
@@ -240,7 +259,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
-        'SELECT * FROM User WHERE role = 2 ORDER BY name ASC',
+        'SELECT * FROM user WHERE role = 2 ORDER BY name ASC',
       );
       return result.rows
           .map((row) => UserModel.fromMap(row.assoc()))
@@ -258,8 +277,10 @@ class UserService implements IUserService {
       final conn = await _db.getConnection();
       final hashedPassword = EncryptionHelper.hashPassword(password);
       await conn.execute(
-        '''INSERT INTO User (name, email, password, role, cellphone, state)
-        VALUES (:name, :email, :password, 2, :cellphone, :state)''',
+        '''
+        INSERT INTO user (name, email, password, role, cellphone, state)
+        VALUES (:name, :email, :password, 2, :cellphone, :state)
+        ''',
         {
           'name': user.name,
           'email': user.email,
@@ -281,7 +302,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        'UPDATE User SET state = 0 WHERE ID = :id AND role = 2',
+        'UPDATE user SET state = 0 WHERE ID = :id AND role = 2',
         {'id': id},
       );
       return true;
@@ -299,9 +320,15 @@ class UserService implements IUserService {
       if (newPassword != null && newPassword.isNotEmpty) {
         final hashed = EncryptionHelper.hashPassword(newPassword);
         await conn.execute(
-          '''UPDATE User SET name = :name, email = :email,
-          cellphone = :cellphone, state = :state, password = :password
-          WHERE ID = :id AND role = 2''',
+          '''
+          UPDATE user SET
+            name = :name,
+            email = :email,
+            cellphone = :cellphone,
+            state = :state,
+            password = :password
+          WHERE ID = :id AND role = 2
+          ''',
           {
             'name': user.name,
             'email': user.email,
@@ -313,9 +340,14 @@ class UserService implements IUserService {
         );
       } else {
         await conn.execute(
-          '''UPDATE User SET name = :name, email = :email,
-          cellphone = :cellphone, state = :state
-          WHERE ID = :id AND role = 2''',
+          '''
+          UPDATE user SET
+            name = :name,
+            email = :email,
+            cellphone = :cellphone,
+            state = :state
+          WHERE ID = :id AND role = 2
+          ''',
           {
             'name': user.name,
             'email': user.email,
@@ -338,7 +370,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        'UPDATE User SET balance = balance + :amount WHERE ID = :id',
+        'UPDATE user SET balance = balance + :amount WHERE ID = :id',
         {'amount': amount, 'id': id},
       );
       return true;
@@ -354,7 +386,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       await conn.execute(
-        'UPDATE User SET state = :state WHERE ID = :id',
+        'UPDATE user SET state = :state WHERE ID = :id',
         {'state': state, 'id': id},
       );
       return true;
@@ -370,7 +402,7 @@ class UserService implements IUserService {
     try {
       final conn = await _db.getConnection();
       final result = await conn.execute(
-        'SELECT * FROM User WHERE email = :email AND state = 1',
+        'SELECT * FROM user WHERE email = :email AND state = 1',
         {'email': email},
       );
 
@@ -400,7 +432,7 @@ class UserService implements IUserService {
       final conn = await _db.getConnection();
       int? pickUpLocationID = user.pickUpLocationID;
 
-      /// Si ya existe un punto de recogida, actualiza Location y PickupLocation
+      /// Si ya existe un punto de recogida, actualiza location y pickuplocation
       if (pickUpLocationID != null) {
         final updatedLocation = await _locationService.updateLocation(
           locationId: pickUpLocationID,
@@ -417,7 +449,7 @@ class UserService implements IUserService {
 
         if (!updatedPickup) return false;
       } else {
-        /// Si no existe, crea Location y PickupLocation
+        /// Si no existe, crea location y pickuplocation
         final locationID = await _locationService.createLocation(
           LocationModel(
             latitude: latitude,
@@ -442,15 +474,15 @@ class UserService implements IUserService {
       /// Actualiza el perfil del productor incluyendo descripción y pickUpLocationID
       await conn.execute(
         '''
-      UPDATE User
-      SET name = :name,
-          email = :email,
-          cellphone = :cellphone,
-          image = :image,
-          description = :description,
-          pickUpLocationID = :pickUpLocationID
-      WHERE ID = :id
-      ''',
+        UPDATE user
+        SET name = :name,
+            email = :email,
+            cellphone = :cellphone,
+            image = :image,
+            description = :description,
+            pickUpLocationID = :pickUpLocationID
+        WHERE ID = :id
+        ''',
         {
           'name': user.name,
           'email': user.email,
@@ -471,7 +503,11 @@ class UserService implements IUserService {
 
   /// Actualiza la contraseña de un usuario y envía confirmación por email
   Future<bool> updatePassword(
-      int id, String newPassword, String email, String name) async {
+      int id,
+      String newPassword,
+      String email,
+      String name,
+      ) async {
     try {
       final conn = await _db.getConnection();
 
@@ -479,7 +515,7 @@ class UserService implements IUserService {
       final hashedPassword = EncryptionHelper.hashPassword(newPassword);
 
       await conn.execute(
-        'UPDATE User SET password = :password WHERE ID = :id',
+        'UPDATE user SET password = :password WHERE ID = :id',
         {'password': hashedPassword, 'id': id},
       );
 

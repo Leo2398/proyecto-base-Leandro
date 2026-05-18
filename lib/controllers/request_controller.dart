@@ -19,9 +19,9 @@ class RequestController extends ChangeNotifier {
 
   // ── Polling ────────────────────────────────────────────────────────────────
   Timer? _pollingTimer;
-  int? _watchingRequestId;   // ID del request que estamos vigilando
-  int? _watchingUserId;      // ID del usuario actual
-  int _lastKnownState = 0;   // último estado conocido del request vigilado
+  int? _watchingRequestId; // ID del request que estamos vigilando
+  int? _watchingUserId; // ID del usuario actual
+  int _lastKnownState = 0; // último estado conocido del request vigilado
 
   // ── Notificación in-app ────────────────────────────────────────────────────
   /// Se llama cuando el admin aprueba o rechaza la solicitud
@@ -53,6 +53,7 @@ class RequestController extends ChangeNotifier {
       _isLoading = true;
       _errorMessage = null;
       notifyListeners();
+
       _userRequests = await _requestService.getRequestsByUser(userID);
     } catch (e) {
       _errorMessage = 'Error cargando solicitudes';
@@ -115,6 +116,7 @@ class RequestController extends ChangeNotifier {
   /// Arranca el polling cada 15 segundos para vigilar el request
   void startPolling({required int requestId, required int userId}) {
     stopPolling();
+
     _watchingRequestId = requestId;
     _watchingUserId = userId;
     _lastKnownState = 0;
@@ -123,7 +125,7 @@ class RequestController extends ChangeNotifier {
 
     _pollingTimer = Timer.periodic(
       const Duration(seconds: 15),
-      (_) => _checkRequestStatus(),
+          (_) => _checkRequestStatus(),
     );
   }
 
@@ -132,14 +134,14 @@ class RequestController extends ChangeNotifier {
     _pollingTimer = null;
     _watchingRequestId = null;
     _watchingUserId = null;
+    _lastKnownState = 0;
   }
 
   Future<void> _checkRequestStatus() async {
     if (_watchingRequestId == null || _watchingUserId == null) return;
 
     try {
-      final request =
-          await _requestService.getRequestById(_watchingRequestId!);
+      final request = await _requestService.getRequestById(_watchingRequestId!);
 
       if (request == null) return;
 
@@ -148,21 +150,24 @@ class RequestController extends ChangeNotifier {
         _lastKnownState = request.state;
         print('✓ Estado del request cambió a ${request.stateLabel}');
 
-        // Si fue aprobado, actualiza el balance en el UserController local
-        if (request.state == 1) {
-          await _userService.updateBalance(
-            _watchingUserId!,
-            request.value.toDouble(),
-          );
-        }
+        // IMPORTANTE:
+        // Ya NO se actualiza el balance aquí.
+        // El balance se suma en RequestService.approveRequest().
+        // Si lo sumamos aquí también, se duplica la recarga.
 
         // Recarga lista del usuario
         await loadUserRequests(_watchingUserId!);
 
+        // Refresca datos del usuario si hace falta que la UI tome el nuevo balance
+        // desde la BD por su flujo normal
+        try {
+          await _userService.getUserById(_watchingUserId!);
+        } catch (_) {}
+
         // Notifica a la UI
         onRequestStatusChanged?.call(request);
 
-        // Detiene el polling — ya no hay nada más que vigilar
+        // Detiene el polling: el request ya fue resuelto
         stopPolling();
       }
     } catch (e) {
@@ -172,9 +177,13 @@ class RequestController extends ChangeNotifier {
 
   /// Retoma el polling si hay un request pendiente al volver a la app
   Future<void> resumePollingIfNeeded(int userId) async {
-    final pending = await _requestService.getLatestPendingRequest(userId);
-    if (pending?.id != null) {
-      startPolling(requestId: pending!.id!, userId: userId);
+    try {
+      final pending = await _requestService.getLatestPendingRequest(userId);
+      if (pending?.id != null) {
+        startPolling(requestId: pending!.id!, userId: userId);
+      }
+    } catch (e) {
+      print('Error reanudando polling: $e');
     }
   }
 

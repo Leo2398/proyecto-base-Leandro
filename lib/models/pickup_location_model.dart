@@ -22,13 +22,15 @@ class PickupLocationModel {
   /// Convierte un Map (resultado de la BD) a un objeto PickupLocationModel
   factory PickupLocationModel.fromMap(Map<String, dynamic> map) {
     return PickupLocationModel(
-      locationID: map['LocationID'],
-      address: map['address'],
+      locationID: map['LocationID'] != null
+          ? int.tryParse(map['LocationID'].toString())
+          : null,
+      address: map['address']?.toString() ?? '',
       latitude: map['Latitude'] != null
-          ? double.parse(map['Latitude'].toString())
+          ? double.tryParse(map['Latitude'].toString())
           : null,
       longitude: map['Longitude'] != null
-          ? double.parse(map['Longitude'].toString())
+          ? double.tryParse(map['Longitude'].toString())
           : null,
     );
   }
@@ -43,7 +45,9 @@ class PickupLocationModel {
 
   /// Crea un PickupLocationModel a partir de un LocationModel
   factory PickupLocationModel.fromLocation(
-      LocationModel location, String address) {
+      LocationModel location,
+      String address,
+      ) {
     return PickupLocationModel(
       locationID: location.id,
       address: address,

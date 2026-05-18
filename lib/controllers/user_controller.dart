@@ -4,15 +4,14 @@ import '../services/user_service.dart';
 import '../services/product_family_service.dart';
 import '../core/encryption_helper.dart';
 import '../core/session_helper.dart';
-import '../models/product_family_model.dart';
 import 'package:flutter/material.dart';
 import 'dart:math';
 import '../services/password_reset_service.dart';
 import '../models/password_reset_token_model.dart';
 import '../core/email_helper.dart';
-import '../services/password_reset_service.dart';
 import '../models/schedule_model.dart';
 import '../services/schedule_service.dart';
+
 /// Controlador de Usuario
 /// Principio S de SOLID: solo maneja la lógica de negocio de usuarios
 /// Principio D de SOLID: depende de la interfaz IUserService
@@ -23,12 +22,18 @@ class UserController extends ChangeNotifier {
 
   /// Servicio de familias de productos
   final ProductFamilyService _productFamilyService = ProductFamilyService();
+
   /// Servicio de recuperación de contraseña
   final PasswordResetService _passwordResetService = PasswordResetService();
+
   final ScheduleService _scheduleService = ScheduleService();
 
   /// Usuario actualmente logueado
   UserModel? _currentUser;
+
+  /// Usuario temporal para el flujo de reset de contraseña
+  /// (NO se setea como _currentUser hasta que se complete el cambio)
+  UserModel? _resetFlowUser;
 
   List<UserModel> _producers = [];
   List<UserModel> _admins = [];
@@ -88,7 +93,8 @@ class UserController extends ChangeNotifier {
       notifyListeners();
     }
   }
-    Future<void> reloadCurrentUser() async {
+
+  Future<void> reloadCurrentUser() async {
     if (_currentUser?.id == null) return;
     try {
       final updated = await _userService.getUserById(_currentUser!.id!);
@@ -347,7 +353,7 @@ class UserController extends ChangeNotifier {
       }
 
       final success =
-          await _userService.updateBalance(_currentUser!.id!, amount);
+      await _userService.updateBalance(_currentUser!.id!, amount);
 
       if (success) {
         _currentUser = UserModel(
@@ -509,7 +515,8 @@ class UserController extends ChangeNotifier {
       if (success) {
         final producerId = _currentUser!.id!;
 
-        final deleted = await _scheduleService.deleteSchedulesByProducerId(producerId);
+        final deleted =
+        await _scheduleService.deleteSchedulesByProducerId(producerId);
         if (!deleted) {
           _errorMessage = 'Error al reemplazar los horarios del productor';
           return false;
@@ -524,7 +531,8 @@ class UserController extends ChangeNotifier {
         }
 
         await getFreshCurrentUser();
-        _producerSchedules = await _scheduleService.getSchedulesByProducerId(producerId);
+        _producerSchedules =
+        await _scheduleService.getSchedulesByProducerId(producerId);
       } else {
         _errorMessage = 'Error al actualizar el perfil del productor';
       }
@@ -555,7 +563,8 @@ class UserController extends ChangeNotifier {
         return false;
       }
 
-      if (!EncryptionHelper.verifyPassword(currentPassword, _currentUser!.password)) {
+      if (!EncryptionHelper.verifyPassword(
+          currentPassword, _currentUser!.password)) {
         _errorMessage = 'La contraseña actual es incorrecta';
         return false;
       }
@@ -776,152 +785,169 @@ class UserController extends ChangeNotifier {
   Future<void> logout() async {
     await SessionHelper.clearSession();
     _currentUser = null;
+    _resetFlowUser = null;
     _errorMessage = null;
     _mustChangePassword = false;
     notifyListeners();
   }
+
   /// Envía el código de recuperación al email del usuario
-Future<bool> sendResetCode(String email) async {
-  try {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
+  Future<bool> sendResetCode(String email) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
 
-    /// Verifica que el email exista en la BD
-    final user = await _userService.getUserByEmail(email);
-    if (user == null) {
-      _errorMessage = 'No existe una cuenta con ese email';
+      /// Verifica que el email exista en la BD
+      final user = await _userService.getUserByEmail(email);
+      if (user == null) {
+        _errorMessage = 'No existe una cuenta con ese email';
+        return false;
+      }
+
+      /// Elimina tokens anteriores del usuario
+      await _passwordResetService.deleteUserTokens(user.id!);
+
+      /// Genera un código de 6 dígitos aleatorio
+      final random = Random();
+      final code = (100000 + random.nextInt(900000)).toString();
+
+      /// Crea el token con expiración de 15 minutos
+      final token = PasswordResetTokenModel(
+        token: code,
+        userID: user.id!,
+        expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 15)),
+      );
+
+      /// Guarda el token primero
+      final created = await _passwordResetService.createToken(token);
+      if (!created) {
+        _errorMessage = 'Error al generar el código';
+        return false;
+      }
+
+      /// Envía el email con timeout extendido en segundo plano
+      Future(() async {
+        try {
+          await EmailHelper.sendResetCode(
+            toEmail: email,
+            userName: user.name,
+            code: code,
+          ).timeout(const Duration(seconds: 60));
+        } catch (e) {
+          print('Error enviando email reset: $e');
+        }
+      });
+
+      return true;
+    } catch (e) {
+      _errorMessage = 'Error al enviar el código: $e';
       return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    /// Elimina tokens anteriores del usuario
-    await _passwordResetService.deleteUserTokens(user.id!);
-
-    /// Genera un código de 6 dígitos aleatorio
-    final random = Random();
-    final code = (100000 + random.nextInt(900000)).toString();
-
-    /// Crea el token con expiración de 15 minutos
-    final token = PasswordResetTokenModel(
-      token: code,
-      userID: user.id!,
-      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 15)),
-    );
-
-    /// Guarda el token primero
-final created = await _passwordResetService.createToken(token);
-if (!created) {
-  _errorMessage = 'Error al generar el código';
-  return false;
-}
-
-/// Envía el email con timeout extendido en segundo plano
-Future(() async {
-  try {
-    await EmailHelper.sendResetCode(
-      toEmail: email,
-      userName: user.name,
-      code: code,
-    ).timeout(const Duration(seconds: 60));
-  } catch (e) {
-    print('Error enviando email reset: $e');
   }
-});
 
-return true;
+  /// Verifica el código ingresado por el usuario
+  ///
+  /// IMPORTANTE: este método NO loguea al usuario. Solo valida el código
+  /// y guarda al usuario en una variable interna [_resetFlowUser] que se
+  /// usará después en [completePasswordReset]. La sesión real solo se
+  /// abre cuando el usuario realmente cambia su contraseña.
+  Future<bool> verifyResetCode(String email, String code) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
 
-  } catch (e) {
-    _errorMessage = 'Error al enviar el código: $e';
-    return false;
-  } finally {
-    _isLoading = false;
-    notifyListeners();
+      /// Obtiene el usuario por email
+      final user = await _userService.getUserByEmail(email);
+      if (user == null) {
+        _errorMessage = 'No existe una cuenta con ese email';
+        return false;
+      }
+
+      /// Verifica que el token sea válido
+      final token = await _passwordResetService.getValidToken(user.id!, code);
+      if (token == null) {
+        _errorMessage = 'Código inválido o expirado';
+        return false;
+      }
+
+      /// Guarda el usuario SOLO en la variable de flujo de reset.
+      /// NO toca _currentUser para no abrir sesión sin haber cambiado password.
+      _resetFlowUser = user;
+
+      return true;
+    } catch (e) {
+      _errorMessage = 'Error al verificar el código: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
-}
 
-/// Verifica el código ingresado por el usuario
-Future<bool> verifyResetCode(String email, String code) async {
-  try {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-    print('Email: ${email}');
-print('Código ingresado: "$code"');
-    /// Obtiene el usuario por email
-    final user = await _userService.getUserByEmail(email);
-    if (user == null) {
-      _errorMessage = 'No existe una cuenta con ese email';
+  /// Completa el reset de contraseña marcando el token como usado
+  Future<bool> completePasswordReset(
+      String email, String code, String newPassword) async {
+    try {
+      _isLoading = true;
+      _errorMessage = null;
+      notifyListeners();
+
+      final user = await _userService.getUserByEmail(email);
+      if (user == null) {
+        _errorMessage = 'No existe una cuenta con ese email';
+        return false;
+      }
+
+      /// Verifica el token una última vez antes de cambiar
+      final token = await _passwordResetService.getValidToken(user.id!, code);
+      if (token == null) {
+        _errorMessage = 'Código inválido o expirado';
+        return false;
+      }
+
+      if (newPassword.length < 8) {
+        _errorMessage = 'La contraseña debe tener mínimo 8 caracteres';
+        return false;
+      }
+
+      if (EncryptionHelper.isTempPassword(newPassword)) {
+        _errorMessage = 'No puedes usar una contraseña temporal';
+        return false;
+      }
+
+      /// Actualiza la contraseña
+      final success = await (_userService as UserService).updatePassword(
+        user.id!,
+        newPassword,
+        user.email,
+        user.name,
+      );
+
+      if (!success) {
+        _errorMessage = 'Error al actualizar la contraseña';
+        return false;
+      }
+
+      /// Marca el token como usado
+      await _passwordResetService.markTokenAsUsed(token.id!);
+
+      /// Limpia el usuario temporal del flujo de reset.
+      /// El usuario debe ir al login y autenticarse normalmente con su
+      /// nueva contraseña.
+      _resetFlowUser = null;
+
+      return true;
+    } catch (e) {
+      _errorMessage = 'Error al restablecer la contraseña: $e';
       return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
-
-    /// Verifica que el token sea válido
-    final token = await _passwordResetService.getValidToken(user.id!, code);
-    if (token == null) {
-      _errorMessage = 'Código inválido o expirado';
-      return false;
-    }
-
-    /// Guarda el usuario temporalmente para el cambio de contraseña
-    _currentUser = user;
-
-    return true;
-  } catch (e) {
-    _errorMessage = 'Error al verificar el código: $e';
-    return false;
-  } finally {
-    _isLoading = false;
-    notifyListeners();
   }
-}
-
-/// Completa el reset de contraseña marcando el token como usado
-Future<bool> completePasswordReset(String email, String code, String newPassword) async {
-  try {
-    _isLoading = true;
-    _errorMessage = null;
-    notifyListeners();
-
-    final user = await _userService.getUserByEmail(email);
-    if (user == null) {
-      _errorMessage = 'No existe una cuenta con ese email';
-      return false;
-    }
-
-    /// Verifica el token una última vez antes de cambiar
-    final token = await _passwordResetService.getValidToken(user.id!, code);
-    if (token == null) {
-      _errorMessage = 'Código inválido o expirado';
-      return false;
-    }
-
-    if (newPassword.length < 8) {
-      _errorMessage = 'La contraseña debe tener mínimo 8 caracteres';
-      return false;
-    }
-
-    /// Actualiza la contraseña
-    final success = await (_userService as UserService).updatePassword(
-      user.id!,
-      newPassword,
-      user.email,
-      user.name,
-    );
-
-    if (!success) {
-      _errorMessage = 'Error al actualizar la contraseña';
-      return false;
-    }
-
-    /// Marca el token como usado
-    await _passwordResetService.markTokenAsUsed(token.id!);
-
-    return true;
-  } catch (e) {
-    _errorMessage = 'Error al restablecer la contraseña: $e';
-    return false;
-  } finally {
-    _isLoading = false;
-    notifyListeners();
-  }
-}
 }

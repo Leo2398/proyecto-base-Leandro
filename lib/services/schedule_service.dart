@@ -13,7 +13,7 @@ class ScheduleService implements IScheduleService {
       final result = await conn.execute(
         '''
         SELECT id, day, openingTime, closingTime, producerID
-        FROM Schedule
+        FROM schedule
         WHERE producerID = :producerID
         ORDER BY day ASC, openingTime ASC
         ''',
@@ -39,7 +39,7 @@ class ScheduleService implements IScheduleService {
 
       await conn.execute(
         '''
-        INSERT INTO Schedule (day, openingTime, closingTime, producerID)
+        INSERT INTO schedule (day, openingTime, closingTime, producerID)
         VALUES (:day, :openingTime, :closingTime, :producerID)
         ''',
         {
@@ -70,7 +70,7 @@ class ScheduleService implements IScheduleService {
 
       await conn.execute(
         '''
-        UPDATE Schedule SET
+        UPDATE schedule SET
           day = :day,
           openingTime = :openingTime,
           closingTime = :closingTime,
@@ -101,7 +101,7 @@ class ScheduleService implements IScheduleService {
 
       await conn.execute(
         '''
-        DELETE FROM Schedule
+        DELETE FROM schedule
         WHERE id = :id
         ''',
         {
@@ -124,7 +124,7 @@ class ScheduleService implements IScheduleService {
 
       await conn.execute(
         '''
-        DELETE FROM Schedule
+        DELETE FROM schedule
         WHERE producerID = :producerID
         ''',
         {
@@ -151,7 +151,7 @@ class ScheduleService implements IScheduleService {
       /// Elimina primero todos los horarios actuales del productor
       await conn.execute(
         '''
-        DELETE FROM Schedule
+        DELETE FROM schedule
         WHERE producerID = :producerID
         ''',
         {
@@ -163,7 +163,7 @@ class ScheduleService implements IScheduleService {
       for (final schedule in schedules) {
         await conn.execute(
           '''
-          INSERT INTO Schedule (day, openingTime, closingTime, producerID)
+          INSERT INTO schedule (day, openingTime, closingTime, producerID)
           VALUES (:day, :openingTime, :closingTime, :producerID)
           ''',
           {

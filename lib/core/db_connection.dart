@@ -29,13 +29,12 @@ class DBConnection {
         _connection = null;
       }
 
-      /// Crea una nueva conexión
       _connection = await MySQLConnection.createConnection(
-        host: 'mysql-dd43cae-santiagsanchez05-9b31.f.aivencloud.com',
-        port: 27698,
-        userName: 'avnadmin',
-        password: 'AVNS_Mdhd_rVXu2m_A2sqku_',
-        databaseName: 'defaultdb',
+        host: 'mysql-141d5c3f-suarezmateo950-a1c5.d.aivencloud.com',
+        port: 22052,
+        userName: 'app_user',
+        password: 'AVNS_p5dIV65HBQ0aSpAhzMI',
+        databaseName: 'app_pedidos',
         secure: true,
       );
 

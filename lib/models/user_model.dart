@@ -34,28 +34,30 @@ class UserModel {
   });
 
   /// Convierte un Map (resultado de la BD) a un objeto UserModel
-factory UserModel.fromMap(Map<String, dynamic> map) {
-  return UserModel(
-    id: map['ID'] != null ? int.parse(map['ID'].toString()) : null,
-    name: map['name']?.toString() ?? '',
-    image: map['image']?.toString(),
-    balance: map['balance'] != null
-        ? double.parse(map['balance'].toString())
-        : 0.0,
-    email: map['email']?.toString() ?? '',
-    password: map['password']?.toString() ?? '',
-    description: map['description']?.toString(),
-    role: map['role'] != null ? int.parse(map['role'].toString()) : 0,
-    cellphone: map['cellphone']?.toString(),
-    deliveryModeID: map['deliveryModeID'] != null
-        ? int.parse(map['deliveryModeID'].toString())
-        : null,
-    pickUpLocationID: map['pickUpLocationID'] != null
-        ? int.parse(map['pickUpLocationID'].toString())
-        : null,
-    state: map['state'] != null ? int.parse(map['state'].toString()) : 1,
-  );
-}
+  factory UserModel.fromMap(Map<String, dynamic> map) {
+    return UserModel(
+      id: map['ID'] != null ? int.parse(map['ID'].toString()) : null,
+      name: map['name']?.toString() ?? '',
+      image: map['image']?.toString(),
+      balance: map['balance'] != null
+          ? double.parse(map['balance'].toString())
+          : 0.0,
+      email: map['email']?.toString() ?? '',
+      password: map['password']?.toString() ?? '',
+      description: map['description']?.toString(),
+      role: map['role'] != null ? int.parse(map['role'].toString()) : 0,
+      cellphone: map['cellphone']?.toString(),
+      deliveryModeID: map['deliveryModeID'] != null
+          ? int.parse(map['deliveryModeID'].toString())
+          : null,
+      pickUpLocationID: map['pickUpLocationID'] != null
+          ? int.parse(map['pickUpLocationID'].toString())
+          : null,
+      registerDate: _parseDateTime(map['registerDate']),
+      state: map['state'] != null ? int.parse(map['state'].toString()) : 1,
+    );
+  }
+
   /// Convierte el objeto UserModel a un Map para insertar en la BD
   Map<String, dynamic> toMap() {
     return {
@@ -73,5 +75,15 @@ factory UserModel.fromMap(Map<String, dynamic> map) {
       'registerDate': registerDate?.toIso8601String(),
       'state': state,
     };
+  }
+
+  /// Convierte cualquier valor dinámico a DateTime
+  /// Acepta DateTime, String ISO, o cualquier formato de fecha de MySQL
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    final text = value.toString().trim();
+    if (text.isEmpty) return null;
+    return DateTime.tryParse(text);
   }
 }
