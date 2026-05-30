@@ -622,6 +622,95 @@
       font-size: 14px;
     }
 
+    .credentials-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .credential-card {
+      position: relative;
+      overflow: hidden;
+      padding: 24px;
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(17, 99, 50, 0.14);
+      box-shadow: 0 18px 44px rgba(8, 65, 31, 0.08);
+    }
+
+    .credential-card::before {
+      content: "";
+      position: absolute;
+      width: 160px;
+      height: 160px;
+      border-radius: 999px;
+      top: -80px;
+      right: -70px;
+      background: rgba(33, 168, 88, 0.13);
+    }
+
+    .credential-icon {
+      width: 56px;
+      height: 56px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--green-600), var(--green-900));
+      color: white;
+      font-size: 26px;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .credential-card h3 {
+      position: relative;
+      z-index: 1;
+      color: var(--green-950);
+      font-size: 21px;
+      margin-bottom: 12px;
+    }
+
+    .credential-data {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .credential-data div {
+      padding: 12px 13px;
+      border-radius: 16px;
+      background: #f4fbf2;
+      border: 1px solid #dfeedd;
+      color: #284832;
+      font-size: 13px;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .credential-data strong {
+      display: block;
+      color: var(--green-900);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      margin-bottom: 4px;
+    }
+
+    .credentials-note {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 22px;
+      background: #fff8e8;
+      border: 1px solid #ffe1a3;
+      color: #76520a;
+      line-height: 1.6;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
     .install-panel {
       display: grid;
       grid-template-columns: 0.9fr 1.1fr;
@@ -730,7 +819,8 @@
         min-height: 420px;
       }
 
-      .modules {
+      .modules,
+      .credentials-grid {
         grid-template-columns: 1fr;
       }
     }
@@ -780,6 +870,7 @@
       <div class="nav-actions">
         <a class="nav-pill" href="#descargas">Descargas</a>
         <a class="nav-pill" href="#modulos">Módulos</a>
+        <a class="nav-pill" href="#credenciales">Credenciales</a>
         <a class="nav-pill" href="#instalacion">Instalación</a>
       </div>
     </nav>
@@ -916,6 +1007,48 @@
           <h3>Administrador</h3>
           <p>Control de usuarios, empresas, solicitudes de recarga, configuración de QR, reportes y métricas del sistema.</p>
         </article>
+      </div>
+    </section>
+
+    <section id="credenciales">
+      <div class="section-head">
+        <div>
+          <h2>Credenciales de prueba</h2>
+          <p>Usa estos accesos para ingresar rápidamente a cada rol del sistema durante la presentación.</p>
+        </div>
+      </div>
+
+      <div class="credentials-grid">
+        <article class="credential-card">
+          <div class="credential-icon">👨‍🌾</div>
+          <h3>Proveedor / Productor</h3>
+          <div class="credential-data">
+            <div><strong>Correo</strong>kanguronutria@gmail.com</div>
+            <div><strong>Contraseña</strong>Nutria123</div>
+          </div>
+        </article>
+
+        <article class="credential-card">
+          <div class="credential-icon">📊</div>
+          <h3>Administrador</h3>
+          <div class="credential-data">
+            <div><strong>Correo</strong>nutriadelfin4@gmail.com</div>
+            <div><strong>Contraseña</strong>Delfin123</div>
+          </div>
+        </article>
+
+        <article class="credential-card">
+          <div class="credential-icon">🛒</div>
+          <h3>Cliente</h3>
+          <div class="credential-data">
+            <div><strong>Correo</strong>alejandro74862@gmail.com</div>
+            <div><strong>Contraseña</strong>Ale12345</div>
+          </div>
+        </article>
+      </div>
+
+      <div class="credentials-note">
+        Estas credenciales son de prueba y están pensadas para la revisión del proyecto. La aplicación requiere conexión a internet para validar el acceso y cargar la información.
       </div>
     </section>
 
