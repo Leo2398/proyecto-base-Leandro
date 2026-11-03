@@ -1,0 +1,6 @@
+One hand=0
+Two hands=0
+Drag target distance=0
+Release left remaining=0
+Release all=0 spring joints=0
+Upright after drag=0,9999998

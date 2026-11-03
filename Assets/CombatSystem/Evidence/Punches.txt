@@ -1,0 +1,4 @@
+Left: hits=1 received=1 target speed=0
+Right cumulative hits=2 received=2
+Miss additional hits=0 punches total=3
+Attacker upright=0,9987561

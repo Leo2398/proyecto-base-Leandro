@@ -1,0 +1,41 @@
+{
+  "success": true,
+  "command": "command console",
+  "data": {
+    "command": "console",
+    "parameters": {
+      "tail": "10",
+      "level": "error"
+    },
+    "result": {
+      "entries": [],
+      "cursor": 5,
+      "session": "2aecdf57adc04cb28e690b79465e05b9",
+      "returned": 0,
+      "dropped": false,
+      "reset": false,
+      "counts": {
+        "error": 0,
+        "warn": 2,
+        "log": 3
+      },
+      "groundTruth": {
+        "sampledUtc": "2026-11-02T16:12:54.7453401Z",
+        "ageMs": 262,
+        "compilationFailed": false,
+        "compiling": false,
+        "consoleErrors": 0,
+        "consoleWarnings": 1,
+        "consoleLogs": 2,
+        "seeded": true
+      }
+    },
+    "target": {
+      "host": "127.0.0.1",
+      "port": 7800,
+      "projectPath": "C:\\ProyectoFinalRV"
+    }
+  },
+  "errors": [],
+  "warnings": []
+}

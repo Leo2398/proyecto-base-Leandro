@@ -1,0 +1,14 @@
+Conveyor_A normal displacement=1,76456
+reversed displacement=-1,76456
+accelerated velocity=-3,5
+stopped velocity=0
+Conveyor_B normal displacement=-1,76456
+reversed displacement=1,76456
+accelerated velocity=3,5
+stopped velocity=0
+Lever_A reversed=True
+Lever_A restored=True
+Lever_B reversed=True
+Lever_B restored=True
+Press phases=Rest,Warning,Descending,Compression,Rising
+Press height=4

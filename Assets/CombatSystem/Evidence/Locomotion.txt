@@ -1,0 +1,6 @@
+Rest y=0,855217 upright=1 grounded=True
+Walk displacement=3,464194 speed=2,996988
+Brake speed=0,02136085
+Jump height=1,273611 jumps=1 landed=True
+Run speed=5,962124 yaw=194,1875
+After push upright=0,9990813 speed=0,009656455

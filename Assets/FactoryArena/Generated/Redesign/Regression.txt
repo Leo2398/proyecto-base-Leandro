@@ -1,0 +1,20 @@
+Local redesign regression; 2026-11-02T16:03:42.0094303Z
+SpawnPoint_01 solidFloor=True floor=Deck inset initialBlockingColliders=0
+SpawnPoint_02 solidFloor=True floor=Deck inset initialBlockingColliders=0
+SpawnPoint_03 solidFloor=True floor=Deck inset initialBlockingColliders=0
+SpawnPoint_04 solidFloor=True floor=Deck inset initialBlockingColliders=0
+Probe SpawnPoint_01 restingCenterY=0,9339999 remainsOnArena=True
+Probe SpawnPoint_02 restingCenterY=0,9339999 remainsOnArena=True
+Probe SpawnPoint_03 restingCenterY=0,9339999 remainsOnArena=True
+Probe SpawnPoint_04 restingCenterY=0,9339999 remainsOnArena=True
+Fall trigger events=6
+Press armed sensor events=86
+Press phases=Warning,Descending,Compression,Rising,Rest low=0,65 high=4
+Maximum visual ram endpoint error=2,384186E-07
+New decoration colliders=0 rigidbodies=0
+Conveyor_A stoppedGearAngle=0
+Conveyor_A runningGearAngle=18,12621
+Conveyor_A reversedArrowYaw=270 physicalDirection=-1
+Conveyor_B stoppedGearAngle=0
+Conveyor_B runningGearAngle=18,06653
+Conveyor_B reversedArrowYaw=90 physicalDirection=1

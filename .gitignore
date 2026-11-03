@@ -24,3 +24,20 @@
 *.swp
 *.DS_Store
 Thumbs.db
+
+# Local backups and document preview intermediates (keep originals on disk)
+Documentation/**/Backups/
+Documentation/**/render/
+Documentation/**/render_redesign/
+__pycache__/
+*.pyc
+
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+*.keystore
+*.jks

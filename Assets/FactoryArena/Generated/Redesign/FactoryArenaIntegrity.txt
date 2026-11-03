@@ -1,0 +1,15 @@
+FactoryArena integrity audit
+Missing scripts=0
+Broken serialized object references=0
+Enabled renderers=547 distinct materials=15
+Null/unsupported/error materials=0
+Instanced triangle inventory (not visibility-corrected)=39836
+Light=Industrial light type=Point shadows=None
+Light=Industrial light type=Point shadows=None
+Light=Industrial light type=Point shadows=None
+Light=Key light type=Directional shadows=Soft
+Light=Industrial light type=Point shadows=None
+Light=Industrial light type=Point shadows=None
+Light=Cool skylight fill type=Directional shadows=None
+Main camera HDR=True postprocessing=True
+Colliders=162 rigidbodies=1

@@ -1,0 +1,9 @@
+MultiplayerTest integrity audit
+Missing scripts=0
+Broken serialized object references=0
+Enabled renderers=1 distinct materials=1
+Null/unsupported/error materials=0
+Instanced triangle inventory (not visibility-corrected)=12
+Light=Directional Light type=Directional shadows=None
+Main camera HDR=True postprocessing=True
+Colliders=1 rigidbodies=0
